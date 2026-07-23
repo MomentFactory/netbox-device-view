@@ -1,0 +1,98 @@
+{% load static %}
+{% load helpers %}
+
+{{ device_type_layout_data|json_script:"device-layout-data" }}
+{{ device_type_options|json_script:"device-layout-options" }}
+<div class="device-layout-builder" data-layout-builder data-layout-data-url-template="{{ layout_data_url_template }}" data-default-device-type-id="{{ default_device_type_id }}">
+    <input type="hidden" name="{{ widget.name }}" value="{{ widget.value }}"{% include "django/forms/widgets/attrs.html" %} data-layout-config-input>
+
+    <div class="card border mb-3">
+        <div class="card-header">
+            <strong>Visual Layout Builder</strong>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label" for="{{ widget.attrs.id }}_device_type">Reference device type</label>
+                    <select class="form-select" id="{{ widget.attrs.id }}_device_type" data-device-type-select>
+                        <option value="">Select a device type</option>
+                        {% for device_type in device_type_options %}
+                            <option value="{{ device_type.id }}">{{ device_type.model }}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Used only to populate template dropdowns and front-panel reference.</div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="{{ widget.attrs.id }}_columns">Columns</label>
+                    <input class="form-control" id="{{ widget.attrs.id }}_columns" data-columns type="number" min="1" value="32">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label" for="{{ widget.attrs.id }}_rows">Rows</label>
+                    <input class="form-control" id="{{ widget.attrs.id }}_rows" data-rows type="number" min="1" value="2" readonly>
+                    <div class="form-text">Derived from device type U height.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Auto-fill path</label>
+                    <div class="layout-builder-patterns" data-fill-pattern>
+                        <button class="layout-pattern active" type="button" data-pattern="paired" aria-pressed="true" title="Pair columns">
+                            <span class="layout-pattern-icon" aria-hidden="true">
+                                <span>1</span><span>3</span><span>5</span><span>2</span><span>4</span><span>6</span>
+                            </span>
+                            <span class="visually-hidden">Pair columns</span>
+                        </button>
+                        <button class="layout-pattern" type="button" data-pattern="linear" aria-pressed="false" title="Linear left to right">
+                            <span class="layout-pattern-icon" aria-hidden="true">
+                                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
+                            </span>
+                            <span class="visually-hidden">Linear left to right</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="layout-builder-image mt-3" data-front-image-wrap>
+                <img src="" alt="Device type front panel" data-front-image>
+                <div class="layout-builder-image-empty" data-front-image-empty>Select a reference device type to show its front-panel image.</div>
+            </div>
+
+            <div class="layout-builder-toolbar mt-3">
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_start_column">Start column</label>
+                    <input class="form-control" id="{{ widget.attrs.id }}_start_column" data-start-column type="number" min="1" value="1">
+                </div>
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_gap_every">Gap every</label>
+                    <input class="form-control" id="{{ widget.attrs.id }}_gap_every" data-gap-every type="number" min="0" value="0">
+                </div>
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_gap_size">Gap size</label>
+                    <input class="form-control" id="{{ widget.attrs.id }}_gap_size" data-gap-size type="number" min="0" value="1">
+                </div>
+                <div class="form-check align-self-end mb-2">
+                    <input class="form-check-input" type="checkbox" id="{{ widget.attrs.id }}_reverse" data-reverse>
+                    <label class="form-check-label" for="{{ widget.attrs.id }}_reverse">Reverse order</label>
+                </div>
+                <button class="btn btn-primary align-self-end" type="button" data-autofill>Auto-fill interfaces</button>
+                <button class="btn btn-outline-secondary align-self-end" type="button" data-fill-blanks>Fill blanks</button>
+                <button class="btn btn-outline-danger align-self-end" type="button" data-clear-grid>Clear grid</button>
+            </div>
+
+            <div class="layout-builder-grid-wrap mt-3">
+                <div class="layout-builder-grid" data-grid></div>
+            </div>
+
+            <div class="layout-builder-cell-editor mt-3" data-cell-editor hidden>
+                <div>
+                    <strong data-selected-cell-label>Selected cell</strong>
+                    <div class="text-muted small">Assign one interface, spacer, or empty marker to the selected grid cell.</div>
+                </div>
+                <select class="form-select" data-cell-token-select></select>
+            </div>
+
+            <details class="mt-3">
+                <summary>Generated CSS preview</summary>
+                <pre class="layout-builder-css-preview" data-css-preview></pre>
+            </details>
+        </div>
+    </div>
+</div>

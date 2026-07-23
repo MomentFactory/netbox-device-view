@@ -7,6 +7,12 @@ from django.conf import settings
 import re
 
 
+EMPTY_AREA_TOKENS = {".", "x", "z"}
+SPACE_AREA_TOKEN = "__space__"
+SPACER_AREA_PATTERN = re.compile(r"^s\d+$")
+CSS_AREA_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]*$")
+
+
 # ---------------------------------------------------------------------------
 # Query-count helpers
 # ---------------------------------------------------------------------------
@@ -95,6 +101,170 @@ def extract_port_number(port_name):
     if match:
         return match.group(1)
     return ""
+
+
+def normalize_grid_area_name(name, fallback=None):
+    """Return the same CSS-safe area name used for rendered ports."""
+    if not isinstance(name, str):
+        name = ""
+
+    stylename = re.sub(r"[/\.\s\+]+", "-", name.lower())
+    stylename = re.sub(r"-+", "-", stylename).strip("-")
+
+    if not stylename and fallback is not None:
+        stylename = f"iface-{fallback}"
+
+    if stylename and (stylename[0].isdigit() or stylename[0] == "-"):
+        stylename = f"p{stylename}"
+
+    return stylename
+
+
+def css_grid_area_is_safe(token):
+    return token in EMPTY_AREA_TOKENS or token == SPACE_AREA_TOKEN or SPACER_AREA_PATTERN.match(token) or CSS_AREA_PATTERN.match(token)
+
+
+def _is_builder_empty_token(token):
+    return not token or token in EMPTY_AREA_TOKENS or token == SPACE_AREA_TOKEN or SPACER_AREA_PATTERN.match(token)
+
+
+def render_builder_grid_rows(grid):
+    """Convert editable builder tokens into CSS grid-area rows."""
+    spacer_names = {}
+    spacer_count = 0
+    rendered_grid = []
+
+    for row in grid:
+        first_component = -1
+        last_component = -1
+
+        for column_index, token in enumerate(row):
+            token = str(token or ".").strip()
+            if not _is_builder_empty_token(token):
+                if first_component == -1:
+                    first_component = column_index
+                last_component = column_index
+
+        rendered_row = []
+        for column_index, token in enumerate(row):
+            token = str(token or ".").strip()
+
+            if token in {"x", "z"}:
+                rendered_row.append(token)
+                continue
+
+            if token == ".":
+                if first_component == -1 or column_index < first_component:
+                    rendered_row.append("x")
+                    continue
+                if column_index > last_component:
+                    rendered_row.append("z")
+                    continue
+
+            if token == "." or token == SPACE_AREA_TOKEN or SPACER_AREA_PATTERN.match(token):
+                spacer_key = (column_index, "auto" if token == "." else "space")
+                if spacer_key not in spacer_names:
+                    spacer_names[spacer_key] = f"s{spacer_count}"
+                    spacer_count += 1
+                rendered_row.append(spacer_names[spacer_key])
+                continue
+
+            rendered_row.append(token)
+
+        rendered_grid.append(rendered_row)
+
+    return rendered_grid
+
+
+def get_device_type_layout_data(device_type):
+    """Build serializable layout-builder data for a NetBox DeviceType."""
+    def _templates(model_name, *manager_names):
+        for manager_name in manager_names:
+            manager = getattr(device_type, manager_name, None)
+            if manager is not None:
+                return manager.all().order_by("name")
+
+        try:
+            template_model = apps.get_model("dcim", model_name)
+        except LookupError:
+            return []
+
+        return template_model.objects.filter(device_type=device_type).order_by("name")
+
+    def _template_payload(template):
+        return {
+            "id": template.pk,
+            "name": template.name,
+            "area": normalize_grid_area_name(template.name, template.pk),
+            "type": getattr(template, "type", "") or "",
+        }
+
+    def _is_physical_interface_template(template):
+        return getattr(template, "type", "") not in {"virtual", "lag"}
+
+    front_image = getattr(device_type, "front_image", None)
+    image_url = front_image.url if front_image else ""
+    u_height = float(device_type.u_height or 1)
+    rows = max(2, int(u_height * 2))
+
+    return {
+        "id": device_type.pk,
+        "model": device_type.model,
+        "u_height": u_height,
+        "rows": rows,
+        "columns": 32,
+        "front_image_url": image_url,
+        "interfaces": [
+            _template_payload(template)
+            for template in _templates("InterfaceTemplate", "interface_templates", "interfacetemplates")
+            if _is_physical_interface_template(template)
+        ],
+        "front_ports": [
+            _template_payload(template)
+            for template in _templates("FrontPortTemplate", "front_port_templates", "frontporttemplates")
+        ],
+        "rear_ports": [
+            _template_payload(template)
+            for template in _templates("RearPortTemplate", "rear_port_templates", "rearporttemplates")
+        ],
+        "console_ports": [
+            _template_payload(template)
+            for template in _templates("ConsolePortTemplate", "console_port_templates", "consoleporttemplates")
+        ],
+    }
+
+
+def generate_grid_template_css(layout_config):
+    """Convert a layout-builder config into the CSS consumed by existing views."""
+    if not layout_config or layout_config.get("mode") != "builder":
+        return ""
+
+    rows = int(layout_config.get("rows") or 2)
+    columns = int(layout_config.get("columns") or 32)
+    grid = layout_config.get("grid") or []
+
+    if rows < 1 or columns < 1:
+        raise ValueError("Rows and columns must be greater than zero.")
+    if len(grid) != rows:
+        raise ValueError(f"Expected {rows} grid rows, found {len(grid)}.")
+
+    validated_grid = []
+    for row_index, row in enumerate(grid, start=1):
+        if len(row) != columns:
+            raise ValueError(f"Expected {columns} columns in row {row_index}, found {len(row)}.")
+
+        validated_row = []
+        for token in row:
+            token = str(token or ".").strip()
+            if not css_grid_area_is_safe(token):
+                raise ValueError(f"Invalid grid area token: {token}")
+            validated_row.append(token)
+        validated_grid.append(validated_row)
+
+    rendered_rows = ['"' + " ".join(row) + '"' for row in render_builder_grid_rows(validated_grid)]
+
+    css_rows = "\n    ".join(rendered_rows)
+    return ".deviceview.area {\n    grid-template-areas:\n    " + css_rows + ";\n}"
 
 
 def process_interfaces(interfaces, ports_chassis, dev):

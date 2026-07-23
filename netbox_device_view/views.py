@@ -1,11 +1,11 @@
 from netbox.views import generic
-from dcim.models import Device, Site, Rack
+from dcim.models import Device, DeviceType, Site, Rack
 from . import forms, models, tables, filtersets
 from utilities.views import ViewTab, register_model_view
 # utilities.permissions.PermissionRequiredMixin was incorrect, removed.
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin # Standard Django mixins
-from .utils import prepare, build_device_view_lookup
-from django.http import HttpResponse
+from .utils import prepare, build_device_view_lookup, get_device_type_layout_data
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.apps import apps
 from django.views import View as DjangoView
@@ -28,6 +28,7 @@ class DeviceViewListView(generic.ObjectListView):
 class DeviceViewEditView(generic.ObjectEditView):
     queryset = models.DeviceView.objects
     form = forms.DeviceViewForm
+    template_name = "netbox_device_view/deviceview_edit.html"
 
 
 class DeviceViewBulkImportView(BulkImportView):
@@ -42,6 +43,20 @@ class DeviceViewDeleteView(generic.ObjectDeleteView):
 class DeviceViewBulkDeleteView(generic.BulkDeleteView):
     queryset = models.DeviceView.objects
     table = tables.DeviceViewTable
+
+
+class DeviceTypeLayoutDataView(DjangoView):
+
+    def get(self, request, pk):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required"}, status=403)
+
+        try:
+            device_type = DeviceType.objects.get(pk=pk)
+        except DeviceType.DoesNotExist:
+            raise Http404
+
+        return JsonResponse(get_device_type_layout_data(device_type))
 
 
 @register_model_view(Device, "deviceview", path="device-view")

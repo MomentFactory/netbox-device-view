@@ -50,4 +50,4 @@ target_version = ['py39', 'py310', 'py311', 'py312']
 exclude = ["develop*"]
 
 [tool.setuptools.package-data]
-netbox_device_view = ["templates/**"]
+netbox_device_view = ["templates/**", "static/**"]

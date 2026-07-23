@@ -57,6 +57,10 @@ python3 manage.py collectstatic --no-input
 
 For each Device Type you need to add a DeviceView.
 
+DeviceView includes a visual layout builder that can generate the CSS grid for common front-panel layouts. Select a reference device type, use the front-panel image as a guide, assign interface templates into the generated grid, and use the auto-fill controls for paired top/bottom or linear numbering. The builder derives the row count from the reference device type height (`u_height * 2`) and defaults to 32 columns.
+
+The generated CSS is still saved to `grid_template_area`, so existing rendering and API consumers continue to work. For unusual layouts, leave the builder disabled and edit `grid_template_area` directly.
+
 It is based on a CSS grid view with 32 columns and 2 rows.
 You need to specify the grid-template-areas. 
 - Interface positions will use the following format: {interfacename}{module}-{port} 

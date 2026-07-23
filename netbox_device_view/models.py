@@ -12,6 +12,12 @@ class DeviceView(NetBoxModel):
     )
 
     grid_template_area = models.TextField(blank=False)
+
+    layout_config = models.JSONField(
+        blank=True,
+        default=dict,
+        help_text="Structured layout-builder configuration used to generate grid CSS",
+    )
     
     name = models.CharField(
         max_length=100,
