@@ -28,6 +28,7 @@ services:
     environment:
         DEBUG: "True"
         DEVELOPER: "True"
+        PYTHONPATH: "/opt/netbox_device_view"
     tty: true
     build: &build
       context: ${PWD}
@@ -55,6 +56,8 @@ services:
       - ${PWD}/:/opt/netbox_device_view
       - ${PWD}/develop/my_netbox_scripts:/opt/netbox/netbox/scripts            
     env_file: ${PWD}/develop/dev.env
+    environment:
+        PYTHONPATH: "/opt/netbox_device_view"
     tty: true
     build:
       <<: *build
