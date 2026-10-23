@@ -67,11 +67,40 @@
         return ".deviceview.area {\n    grid-template-areas:\n" + rows.join("\n") + ";\n}";
     }
 
+    function gridFromCss(cssText) {
+        var css = String(cssText || "");
+        var declaration = css.match(/grid-template-areas\s*:\s*([\s\S]*?);/i);
+        if (!declaration) return [];
+
+        var rows = [];
+        var rowPattern = /["']([^"']*)["']/g;
+        var match;
+        while ((match = rowPattern.exec(declaration[1])) !== null) {
+            var row = match[1].trim().split(/\s+/).filter(Boolean);
+            if (row.length) rows.push(row);
+        }
+        return rows;
+    }
+
+    function normalizeGridRows(rows) {
+        var columns = rows.reduce(function (largest, row) {
+            return Math.max(largest, row.length);
+        }, 0);
+
+        return rows.map(function (row) {
+            var next = row.slice();
+            while (next.length < columns) next.push(".");
+            return next;
+        });
+    }
+
     function initBuilder(root) {
         var dataScript = document.getElementById("device-layout-data");
         var optionsScript = document.getElementById("device-layout-options");
+        var gridTemplateAreaScript = document.getElementById("device-grid-template-area");
         var deviceTypes = safeParse(dataScript ? dataScript.textContent : "[]", []);
         var deviceTypeOptions = safeParse(optionsScript ? optionsScript.textContent : "[]", []);
+        var existingGridTemplateArea = safeParse(gridTemplateAreaScript ? gridTemplateAreaScript.textContent : "\"\"", "");
         var dataUrlTemplate = root.getAttribute("data-layout-data-url-template") || "";
         var defaultDeviceTypeId = root.getAttribute("data-default-device-type-id") || "";
         var input = root.querySelector("[data-layout-config-input]");
@@ -92,6 +121,7 @@
         var currentDeviceType = null;
         var selectedCell = null;
         var selectedPattern = "paired";
+        var initializedFromExistingLayout = false;
 
         function addDeviceTypeOption(deviceType) {
             if (deviceTypeSelect.querySelector('option[value="' + deviceType.id + '"]')) return;
@@ -253,8 +283,10 @@
             }
             if (currentDeviceType) deviceTypeSelect.value = currentDeviceType.id;
 
-            if (currentDeviceType) {
+            if (currentDeviceType && !initializedFromExistingLayout) {
                 rowsInput.value = currentDeviceType.rows || 2;
+            }
+            if (currentDeviceType) {
                 if (currentDeviceType.front_image_url) {
                     image.src = currentDeviceType.front_image_url;
                     image.hidden = false;
@@ -423,7 +455,17 @@
         if (config.mode === "builder") {
             grid = config.grid || [];
             columnsInput.value = config.columns || 32;
+            if (config.rows) rowsInput.value = config.rows;
+            initializedFromExistingLayout = true;
             if (config.source_device_type_id) deviceTypeSelect.value = config.source_device_type_id;
+        } else {
+            var parsedGrid = normalizeGridRows(gridFromCss(existingGridTemplateArea));
+            if (parsedGrid.length) {
+                grid = parsedGrid;
+                rowsInput.value = parsedGrid.length;
+                columnsInput.value = parsedGrid[0].length || 32;
+                initializedFromExistingLayout = true;
+            }
         }
         if (!deviceTypeSelect.value && defaultDeviceTypeId) deviceTypeSelect.value = defaultDeviceTypeId;
         selectDeviceType(deviceTypeSelect.value);

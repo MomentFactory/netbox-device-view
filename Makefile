@@ -1,5 +1,5 @@
-NETBOX_VERSION?=4.5.7
-PYTHON_VERSION?=3.13
+NETBOX_VERSION?=4.6.5
+PYTHON_VERSION?=3.14
 
 COMPOSE_FILE=./develop/docker-compose.yml
 BUILD_NAME=netbox-plugins

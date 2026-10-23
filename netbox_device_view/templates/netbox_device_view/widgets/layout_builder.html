@@ -3,6 +3,7 @@
 
 {{ device_type_layout_data|json_script:"device-layout-data" }}
 {{ device_type_options|json_script:"device-layout-options" }}
+{{ existing_grid_template_area|json_script:"device-grid-template-area" }}
 <div class="device-layout-builder" data-layout-builder data-layout-data-url-template="{{ layout_data_url_template }}" data-default-device-type-id="{{ default_device_type_id }}">
     <input type="hidden" name="{{ widget.name }}" value="{{ widget.value }}"{% include "django/forms/widgets/attrs.html" %} data-layout-config-input>
 

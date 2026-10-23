@@ -25,7 +25,9 @@ class LayoutBuilderWidget(forms.Widget):
             except json.JSONDecodeError:
                 value = {}
         device_type_ids = list(self.attrs.get("device_type_ids", []))
+        existing_grid_template_area = self.attrs.get("grid_template_area", "")
         self.attrs.pop("device_type_ids", None)
+        self.attrs.pop("grid_template_area", None)
         context = super().get_context(name, value, attrs)
         source_device_type_id = (value or {}).get("source_device_type_id")
         if source_device_type_id:
@@ -51,6 +53,7 @@ class LayoutBuilderWidget(forms.Widget):
             kwargs={"pk": 0},
         ).replace("/0/", "/__device_type_id__/")
         context["default_device_type_id"] = default_device_type_id
+        context["existing_grid_template_area"] = existing_grid_template_area
         return context
 
 
@@ -77,11 +80,15 @@ class DeviceViewForm(NetBoxModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         device_type_ids = []
+        grid_template_area = ""
         if self.instance.pk:
             device_type_ids = list(self.instance.device_types.values_list("pk", flat=True))
+            grid_template_area = self.instance.grid_template_area or ""
         elif self.data:
             device_type_ids = self.data.getlist("device_types")
+            grid_template_area = self.data.get("grid_template_area", "")
         self.fields["layout_config"].widget.attrs["device_type_ids"] = device_type_ids
+        self.fields["layout_config"].widget.attrs["grid_template_area"] = grid_template_area
     
     class Meta:
         model = DeviceView
