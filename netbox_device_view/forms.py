@@ -53,6 +53,11 @@ class LayoutBuilderWidget(forms.Widget):
             kwargs={"pk": 0},
         ).replace("/0/", "/__device_type_id__/")
         context["default_device_type_id"] = default_device_type_id
+        context["preview_url"] = reverse("plugins:netbox_device_view:deviceview_preview")
+        context["devices_url_template"] = reverse(
+            "plugins:netbox_device_view:devicetype_devices",
+            kwargs={"pk": 0},
+        ).replace("/0/", "/__device_type_id__/")
         context["existing_grid_template_area"] = existing_grid_template_area
         return context
 
@@ -87,6 +92,9 @@ class DeviceViewForm(NetBoxModelForm):
         elif self.data:
             device_type_ids = self.data.getlist("device_types")
             grid_template_area = self.data.get("grid_template_area", "")
+        elif self.initial.get("device_types"):
+            initial_types = self.initial["device_types"]
+            device_type_ids = initial_types if isinstance(initial_types, (list, tuple)) else [initial_types]
         self.fields["layout_config"].widget.attrs["device_type_ids"] = device_type_ids
         self.fields["layout_config"].widget.attrs["grid_template_area"] = grid_template_area
     

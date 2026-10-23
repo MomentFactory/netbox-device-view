@@ -4,6 +4,29 @@
 {% load plugins %}
 
 {% block content %}
+{% if missing_devices %}
+<div class="card border-warning mt-3">
+    <div class="card-header text-warning">
+        <i class="mdi mdi-alert"></i>
+        <strong>Missing device views</strong>
+        <span class="text-muted ms-2">These network devices cannot be drawn because their device type has no port mapping.</span>
+    </div>
+    <ul class="list-group list-group-flush">
+        {% for entry in missing_devices %}
+        <li class="list-group-item d-flex justify-content-between align-items-start">
+            <div>
+                <a href="{{ entry.device_type.get_absolute_url }}"><strong>{{ entry.device_type }}</strong></a>
+                <span class="text-muted">({{ entry.devices|length }})</span>:
+                {% for device in entry.devices %}<a href="{{ device.get_absolute_url }}">{{ device.name|default:device.pk }}</a> <small class="text-muted">{{ device.role }}</small>{% if not forloop.last %}, {% endif %}{% endfor %}
+            </div>
+            <a class="btn btn-sm btn-outline-warning ms-3 text-nowrap" href="{% url 'plugins:netbox_device_view:deviceview_add' %}?device_types={{ entry.device_type.pk }}">
+                <i class="mdi mdi-plus-thick"></i> Add view
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
 <div class="row">
     <div class="col-md-12">
         <div class="multi-device-container mt-3">

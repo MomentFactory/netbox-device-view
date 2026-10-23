@@ -1,0 +1,54 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+{% load helpers %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'netbox_device_view/css/device_view.css' %}">
+{% endblock head %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-5">
+    <div class="card">
+      <h2 class="card-header">Device View</h2>
+      <table class="table table-hover attr-table">
+        <tr>
+          <th scope="row">Name</th>
+          <td>{{ object.name|placeholder }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Device Types</th>
+          <td>
+            {% for dt in object.device_types.all %}
+              <a href="{{ dt.get_absolute_url }}">{{ dt }}</a>{% if not forloop.last %}<br>{% endif %}
+            {% endfor %}
+          </td>
+        </tr>
+        <tr>
+          <th scope="row">Layout</th>
+          <td>
+            {% if object.layout_config.mode == "builder" %}
+              {{ object.layout_config.rows }} &times; {{ object.layout_config.columns }} (visual builder)
+            {% else %}
+              Custom CSS
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    </div>
+    <details class="card mt-3">
+      <summary class="card-header cursor-pointer"><strong>Grid CSS</strong></summary>
+      <div class="card-body"><pre class="mb-0">{{ object.grid_template_area }}</pre></div>
+    </details>
+  </div>
+  <div class="col col-md-7">
+    <div class="card">
+      <h2 class="card-header">Preview{% if preview_device_type %} <small class="text-muted fw-light">{{ preview_device_type }}</small>{% endif %}</h2>
+      <div class="card-body">
+        {% if preview %}{{ preview|safe }}{% else %}<span class="text-muted">No preview available.</span>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock content %}

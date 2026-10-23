@@ -116,6 +116,17 @@
         var cellTokenSelect = root.querySelector("[data-cell-token-select]");
         var selectedCellLabel = root.querySelector("[data-selected-cell-label]");
         var startColumnInput = root.querySelector("[data-start-column]");
+        var previewUrl = root.getAttribute("data-preview-url") || "";
+        var devicesUrlTemplate = root.getAttribute("data-devices-url-template") || "";
+        var referenceDeviceSelect = root.querySelector("[data-reference-device]");
+        var overlayControls = root.querySelector("[data-overlay-controls]");
+        var overlayToggle = root.querySelector("[data-overlay-toggle]");
+        var overlayOpacity = root.querySelector("[data-overlay-opacity]");
+        var overlayImg = root.querySelector("[data-overlay-img]");
+        var previewOutput = root.querySelector("[data-preview-output]");
+        var previewSize = root.querySelector("[data-preview-size]");
+        var previewTimer = null;
+        var previewRequest = 0;
         var config = safeParse(input.value, {});
         var grid = [];
         var currentDeviceType = null;
@@ -271,6 +282,79 @@
             };
             input.value = JSON.stringify(nextConfig);
             cssPreview.textContent = cssFromConfig(nextConfig);
+            schedulePreview();
+        }
+
+        function csrfToken() {
+            var field = root.closest("form") && root.closest("form").querySelector("[name=csrfmiddlewaretoken]");
+            if (field) return field.value;
+            var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : "";
+        }
+
+        function schedulePreview() {
+            if (!previewUrl || !previewOutput) return;
+            clearTimeout(previewTimer);
+            previewTimer = setTimeout(refreshPreview, 400);
+        }
+
+        function refreshPreview() {
+            var hasPorts = grid.some(function (row) { return row.some(function (token) { return !isEmptyToken(token); }); });
+            if (!hasPorts) {
+                previewOutput.innerHTML = '<span class="text-muted">Assign ports in the grid to see a preview.</span>';
+                return;
+            }
+            var body = new URLSearchParams();
+            body.set("layout_config", input.value);
+            body.set("device_type_id", currentDeviceType ? currentDeviceType.id : "");
+            body.set("device_id", referenceDeviceSelect.value || "");
+            body.set("display_size", previewSize.value);
+            var requestId = ++previewRequest;
+            fetch(previewUrl, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "X-CSRFToken": csrfToken(), "Content-Type": "application/x-www-form-urlencoded" },
+                body: body.toString(),
+            })
+                .then(function (response) {
+                    if (!response.ok) throw new Error("HTTP " + response.status);
+                    return response.text();
+                })
+                .then(function (html) {
+                    if (requestId === previewRequest) previewOutput.innerHTML = html;
+                })
+                .catch(function (error) {
+                    if (requestId !== previewRequest) return;
+                    previewOutput.innerHTML = '<div class="alert alert-danger mb-0"></div>';
+                    previewOutput.firstChild.textContent = "Preview failed: " + error.message;
+                });
+        }
+
+        function loadReferenceDevices(deviceTypeId) {
+            referenceDeviceSelect.innerHTML = '<option value="">None - use device type templates</option>';
+            if (!deviceTypeId || !devicesUrlTemplate || !window.fetch) return;
+            var url = devicesUrlTemplate.replace("__device_type_id__", encodeURIComponent(deviceTypeId));
+            fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" } })
+                .then(function (response) { return response.ok ? response.json() : { devices: [] }; })
+                .then(function (data) {
+                    (data.devices || []).forEach(function (device) {
+                        var option = document.createElement("option");
+                        option.value = device.id;
+                        option.textContent = device.name;
+                        referenceDeviceSelect.appendChild(option);
+                    });
+                })
+                .catch(function () {});
+        }
+
+        function syncOverlay() {
+            var hasImage = image && !image.hidden && image.getAttribute("src");
+            overlayControls.hidden = !hasImage;
+            var active = hasImage && overlayToggle.checked;
+            overlayOpacity.disabled = !active;
+            if (active) overlayImg.src = image.getAttribute("src");
+            overlayImg.hidden = !active;
+            overlayImg.style.opacity = (parseInt(overlayOpacity.value, 10) || 45) / 100;
         }
 
         function applyDeviceType(deviceType) {
@@ -307,6 +391,8 @@
                 imageEmpty.textContent = "Select a reference device type to show its front-panel image.";
             }
             renderGrid();
+            syncOverlay();
+            loadReferenceDevices(currentDeviceType ? currentDeviceType.id : "");
         }
 
         function selectDeviceType(id) {
@@ -450,6 +536,10 @@
         });
 
         columnsInput.addEventListener("change", renderGrid);
+        overlayToggle.addEventListener("change", syncOverlay);
+        overlayOpacity.addEventListener("input", syncOverlay);
+        referenceDeviceSelect.addEventListener("change", schedulePreview);
+        previewSize.addEventListener("change", schedulePreview);
         deviceTypeSelect.addEventListener("change", function () { selectDeviceType(deviceTypeSelect.value); });
 
         if (config.mode === "builder") {

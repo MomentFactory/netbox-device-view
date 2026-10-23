@@ -4,7 +4,7 @@
 {{ device_type_layout_data|json_script:"device-layout-data" }}
 {{ device_type_options|json_script:"device-layout-options" }}
 {{ existing_grid_template_area|json_script:"device-grid-template-area" }}
-<div class="device-layout-builder" data-layout-builder data-layout-data-url-template="{{ layout_data_url_template }}" data-default-device-type-id="{{ default_device_type_id }}">
+<div class="device-layout-builder" data-layout-builder data-layout-data-url-template="{{ layout_data_url_template }}" data-default-device-type-id="{{ default_device_type_id }}" data-preview-url="{{ preview_url }}" data-devices-url-template="{{ devices_url_template }}">
     <input type="hidden" name="{{ widget.name }}" value="{{ widget.value }}"{% include "django/forms/widgets/attrs.html" %} data-layout-config-input>
 
     <div class="card border mb-3">
@@ -22,6 +22,11 @@
                         {% endfor %}
                     </select>
                     <div class="form-text">Used only to populate template dropdowns and front-panel reference.</div>
+                    <label class="form-label mt-2" for="{{ widget.attrs.id }}_ref_device">Reference device (optional)</label>
+                    <select class="form-select" id="{{ widget.attrs.id }}_ref_device" data-reference-device>
+                        <option value="">None - use device type templates</option>
+                    </select>
+                    <div class="form-text">A real device of that type; the preview shows its VLANs and cabling.</div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label" for="{{ widget.attrs.id }}_columns">Columns</label>
@@ -78,8 +83,19 @@
                 <button class="btn btn-outline-danger align-self-end" type="button" data-clear-grid>Clear grid</button>
             </div>
 
-            <div class="layout-builder-grid-wrap mt-3">
-                <div class="layout-builder-grid" data-grid></div>
+            <div class="layout-builder-overlay-controls mt-3" data-overlay-controls hidden>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="{{ widget.attrs.id }}_overlay" data-overlay-toggle>
+                    <label class="form-check-label" for="{{ widget.attrs.id }}_overlay">Overlay front-panel image on grid</label>
+                </div>
+                <input type="range" class="form-range" min="10" max="90" value="45" data-overlay-opacity aria-label="Overlay opacity" disabled>
+            </div>
+
+            <div class="layout-builder-grid-wrap mt-2">
+                <div class="layout-builder-grid-stack">
+                    <div class="layout-builder-grid" data-grid></div>
+                    <img class="layout-builder-overlay-img" alt="" data-overlay-img hidden>
+                </div>
             </div>
 
             <div class="layout-builder-cell-editor mt-3" data-cell-editor hidden>
@@ -88,6 +104,20 @@
                     <div class="text-muted small">Assign one interface, spacer, or empty marker to the selected grid cell.</div>
                 </div>
                 <select class="form-select" data-cell-token-select></select>
+            </div>
+
+            <div class="card border mt-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>Live preview</strong>
+                    <select class="form-select form-select-sm w-auto" data-preview-size aria-label="Preview size">
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="large">Large</option>
+                    </select>
+                </div>
+                <div class="card-body" data-preview-output>
+                    <span class="text-muted">Assign ports in the grid to see a preview.</span>
+                </div>
             </div>
 
             <details class="mt-3">

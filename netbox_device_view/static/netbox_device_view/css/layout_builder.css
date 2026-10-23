@@ -201,3 +201,34 @@ body.theme-dark .device-layout-builder {
         grid-template-columns: 1fr;
     }
 }
+
+.device-layout-builder .layout-builder-grid-stack {
+    position: relative;
+}
+
+.device-layout-builder .layout-builder-overlay-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+}
+
+.device-layout-builder .layout-builder-overlay-img[hidden] {
+    display: none;
+}
+
+.device-layout-builder .layout-builder-overlay-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.device-layout-builder .layout-builder-overlay-controls[hidden] {
+    display: none;
+}
+
+.device-layout-builder .layout-builder-overlay-controls .form-range {
+    max-width: 12rem;
+}

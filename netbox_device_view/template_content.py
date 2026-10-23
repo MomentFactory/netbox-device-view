@@ -1,7 +1,8 @@
 from netbox.plugins import PluginTemplateExtension
 from .utils import prepare
 from django.conf import settings
-from dcim.models import Device
+from dcim.models import Device, DeviceType
+from .models import DeviceView
 
 
 class PortView(PluginTemplateExtension):
@@ -41,4 +42,23 @@ class DevicePortView(PortView):
         return self.page()
 
 
-template_extensions = [DevicePortView]
+class DeviceTypeViewMapping(PluginTemplateExtension):
+    """Show on the Device Type page whether a device view maps it."""
+
+    model = "dcim.devicetype"
+
+    def right_page(self):
+        device_type = self.context["object"]
+        if not isinstance(device_type, DeviceType):
+            return ""
+
+        return self.render(
+            "netbox_device_view/includes/_devicetype_mapping.html",
+            extra_context={
+                "device_type": device_type,
+                "device_view": DeviceView.objects.filter(device_types=device_type).first(),
+            },
+        )
+
+
+template_extensions = [DevicePortView, DeviceTypeViewMapping]

@@ -5,6 +5,7 @@ from django.apps import apps
 from django.conf import settings
 
 import re
+from types import SimpleNamespace
 
 
 EMPTY_AREA_TOKENS = {".", "x", "z"}
@@ -47,6 +48,97 @@ def build_device_view_lookup(device_type_ids):
             if dt.id not in lookup:
                 lookup[dt.id] = dv_obj
     return lookup
+
+
+def apply_css_prefix(css_text, prefix):
+    """Prefix every CSS selector block with *.prefix* so several views can share a page."""
+    if not prefix:
+        return css_text
+    prefixed = []
+    for line in css_text.splitlines():
+        stripped = line.strip()
+        if (stripped.startswith('.') or stripped.startswith('#')) and '{' in stripped:
+            prefixed.append(f".{prefix} {stripped}")
+        else:
+            prefixed.append(line)
+    return "\n".join(prefixed)
+
+
+def build_template_ports(device_type):
+    """
+    Build stand-in port objects from a DeviceType's component templates so a
+    layout can be previewed without a real Device.  The objects carry only the
+    attributes the port templates read.
+    """
+    layout_data = get_device_type_layout_data(device_type)
+    ports = []
+    for key, is_port in (
+        ("interfaces", False),
+        ("front_ports", True),
+        ("rear_ports", True),
+        ("console_ports", True),
+    ):
+        for item in layout_data[key]:
+            ports.append(
+                SimpleNamespace(
+                    name=item["name"],
+                    stylename=item["area"],
+                    port_number=extract_port_number(item["name"]),
+                    type=item["type"],
+                    is_port=is_port,
+                    enabled=True,
+                    cable=None,
+                    connected_endpoints=[],
+                    link_peers=[],
+                    untagged_vlan=None,
+                    vlan_role_color=None,
+                    label="",
+                    mode="",
+                    poe_mode="",
+                    poe_type="",
+                )
+            )
+    return ports
+
+
+def collect_device_ports(device):
+    """Return the processed port list for a real Device, as prepare() would."""
+    ports_chassis = {}
+    process_interfaces(device.interfaces.all(), ports_chassis, device.name)
+    process_ports(device.frontports.all(), ports_chassis, "Front")
+    process_ports(device.rearports.all(), ports_chassis, "Rear")
+    process_ports(device.consoleports.all(), ports_chassis, device.name)
+    return [port for ports in ports_chassis.values() for port in ports]
+
+
+def get_devices_missing_view(site):
+    """
+    Return devices at *site* whose role is listed in the ``missing_view_roles``
+    plugin setting but whose device type has no DeviceView mapping, grouped by
+    device type: ``[{"device_type": DeviceType, "devices": [Device, ...]}, ...]``.
+    """
+    from dcim.models import Device
+
+    roles = settings.PLUGINS_CONFIG.get("netbox_device_view", {}).get(
+        "missing_view_roles", []
+    )
+    if not roles:
+        return []
+
+    devices = (
+        Device.objects.filter(site=site, role__slug__in=roles)
+        .filter(device_type__device_views__isnull=True)
+        .select_related("device_type__manufacturer", "role")
+        .order_by("device_type__model", "name")
+    )
+
+    grouped = {}
+    for device in devices:
+        entry = grouped.setdefault(
+            device.device_type_id, {"device_type": device.device_type, "devices": []}
+        )
+        entry["devices"].append(device)
+    return list(grouped.values())
 
 
 def get_hostname_last_segment(hostname):
@@ -393,17 +485,7 @@ def prepare(obj, instance_prefix=None, device_view_lookup=None):
         return device_view_model.objects.filter(device_types=device.device_type).first()
 
     def _apply_prefix(css_text):
-        """Prefix every CSS selector block with *.instance_prefix*."""
-        if not instance_prefix:
-            return css_text
-        prefixed = []
-        for line in css_text.splitlines():
-            stripped = line.strip()
-            if (stripped.startswith('.') or stripped.startswith('#')) and '{' in stripped:
-                prefixed.append(f".{instance_prefix} {stripped}")
-            else:
-                prefixed.append(line)
-        return "\n".join(prefixed)
+        return apply_css_prefix(css_text, instance_prefix)
 
     def _console_ports(device):
         """

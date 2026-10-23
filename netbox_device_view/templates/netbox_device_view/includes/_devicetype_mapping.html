@@ -1,0 +1,25 @@
+<div class="card">
+    <h2 class="card-header">Device View</h2>
+    <div class="card-body">
+        {% if device_view %}
+            <p class="mb-2">
+                <i class="mdi mdi-check-circle text-success"></i>
+                Port mapping: <a href="{{ device_view.get_absolute_url }}">{{ device_view }}</a>
+            </p>
+            <a class="btn btn-sm btn-outline-primary" href="{{ device_view.get_absolute_url }}">
+                <i class="mdi mdi-eye"></i> Preview
+            </a>
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'plugins:netbox_device_view:deviceview_edit' pk=device_view.pk %}">
+                <i class="mdi mdi-pencil"></i> Edit
+            </a>
+        {% else %}
+            <p class="text-muted mb-2">
+                <i class="mdi mdi-alert-circle-outline text-warning"></i>
+                No device view mapped, so devices of this type can't be drawn on the Ports views.
+            </p>
+            <a class="btn btn-sm btn-primary" href="{% url 'plugins:netbox_device_view:deviceview_add' %}?device_types={{ device_type.pk }}">
+                <i class="mdi mdi-plus-thick"></i> Add device view
+            </a>
+        {% endif %}
+    </div>
+</div>

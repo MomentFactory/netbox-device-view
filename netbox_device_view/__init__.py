@@ -16,6 +16,9 @@ class NetBoxDeviceViewConfig(PluginConfig):
         "show_on_device_tab": False,
         "show_site_ports": False,
         "site_ports_label": "Port View",
+        # Device role slugs that should have a device view; devices with these
+        # roles and no mapping are flagged on the site Ports tab.
+        "missing_view_roles": ["network-switch", "network-router", "patch-panel"],
         "vlan_role_colors": {
             # Default VLAN role to color mappings (hex colors without #)
             # Users can override these in their configuration.py PLUGINS_CONFIG

@@ -1,0 +1,25 @@
+{% comment %}
+Preview fragment: CSS is already scoped under .dv-preview by the view.
+Expects: css, cell, ports, display_size, link_type, cable_colors, port_type.
+{% endcomment %}
+<style>
+    {% autoescape off %}{{ css }}{% endautoescape %}
+    .dv-preview .deviceview {
+        height: auto;
+        width: max-content;
+        margin: 0;
+        grid-auto-columns: {{ cell }}px;
+        grid-auto-rows: {{ cell }}px;
+    }
+    .dv-preview .device-view-port {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        width: 100%;
+    }
+</style>
+<div class="dv-preview" style="overflow-x: auto;">
+    {% include 'netbox_device_view/includes/_device_panel.html' with device_identifier=1 all_modules_data=None interfaces_for_panel=ports link_type=link_type cable_colors=cable_colors port_type=port_type display_size=display_size %}
+</div>

@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name =  "netbox-device-view"
-version = "0.2.1"
+version = "0.3.0"
 authors = [
     {name = "Peter Baumert", email = "noreply@github.com"},
     {name = "Joel Adria", email = "noreply@github.com"},
@@ -38,9 +38,9 @@ test = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/peterbaumert/netbox-device-view"
-Source = "https://github.com/peterbaumert/netbox-device-view"
-Tracker = "https://github.com/peterbaumert/netbox-device-view"
+Documentation = "https://github.com/MomentFactory/netbox-device-view"
+Source = "https://github.com/MomentFactory/netbox-device-view"
+Tracker = "https://github.com/MomentFactory/netbox-device-view"
 
 [tool.black]
 line-length = 120

@@ -11,6 +11,16 @@ urlpatterns = (
         name="devicetype_layout_data",
     ),
     path(
+        "device-view/device-type/<int:pk>/devices/",
+        views.DeviceTypeDevicesView.as_view(),
+        name="devicetype_devices",
+    ),
+    path(
+        "device-view/preview/",
+        views.DeviceViewPreviewView.as_view(),
+        name="deviceview_preview",
+    ),
+    path(
         "device-view/import/",
         views.DeviceViewBulkImportView.as_view(),
         name="deviceview_import",

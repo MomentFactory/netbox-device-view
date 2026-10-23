@@ -4,9 +4,20 @@ from . import forms, models, tables, filtersets
 from utilities.views import ViewTab, register_model_view
 # utilities.permissions.PermissionRequiredMixin was incorrect, removed.
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin # Standard Django mixins
-from .utils import prepare, build_device_view_lookup, get_device_type_layout_data
-from django.http import Http404, HttpResponse, JsonResponse
+from .utils import (
+    prepare,
+    build_device_view_lookup,
+    get_device_type_layout_data,
+    get_devices_missing_view,
+    apply_css_prefix,
+    build_template_ports,
+    collect_device_ports,
+    generate_grid_template_css,
+)
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
+from django.template.loader import render_to_string
+import json
 from django.apps import apps
 from django.views import View as DjangoView
 from django.conf import settings
@@ -16,8 +27,38 @@ from netbox.views.generic import BulkImportView
 from .forms import DeviceViewImportForm
 
 
+PREVIEW_CELL_SIZES = {"small": 20, "medium": 40, "large": 60}
+
+
+def render_layout_preview(css, ports, display_size="medium"):
+    """Render *ports* on the grid defined by *css* using the production port templates."""
+    cell = PREVIEW_CELL_SIZES.get(display_size, 40)
+    return render_to_string(
+        "netbox_device_view/includes/_preview.html",
+        {
+            "css": apply_css_prefix(css, "dv-preview"),
+            "cell": cell,
+            "ports": ports,
+            "display_size": display_size if display_size in PREVIEW_CELL_SIZES else "medium",
+            "link_type": "interface",
+            "cable_colors": "vlan_role",
+            "port_type": "vlan_letter",
+        },
+    )
+
+
 class DeviceViewView(generic.ObjectView):
     queryset = models.DeviceView.objects
+    template_name = "netbox_device_view/deviceview_detail.html"
+
+    def get_extra_context(self, request, instance):
+        device_type = instance.device_types.first()
+        preview = ""
+        if device_type is not None and instance.grid_template_area:
+            preview = render_layout_preview(
+                instance.grid_template_area, build_template_ports(device_type)
+            )
+        return {"preview": preview, "preview_device_type": device_type}
 
 
 class DeviceViewListView(generic.ObjectListView):
@@ -57,6 +98,85 @@ class DeviceTypeLayoutDataView(DjangoView):
             raise Http404
 
         return JsonResponse(get_device_type_layout_data(device_type))
+
+
+class DeviceViewPreviewView(DjangoView):
+    """Render an HTML fragment previewing a (possibly unsaved) layout."""
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required"}, status=403)
+        if not request.user.has_perm("netbox_device_view.view_deviceview"):
+            return JsonResponse({"error": "Permission denied"}, status=403)
+
+        try:
+            layout_config = json.loads(request.POST.get("layout_config") or "{}")
+        except json.JSONDecodeError:
+            return HttpResponseBadRequest("Invalid layout_config")
+
+        try:
+            css = generate_grid_template_css(layout_config) or request.POST.get(
+                "grid_template_area", ""
+            )
+        except (ValueError, TypeError) as exc:
+            return render(
+                request,
+                "netbox_device_view/includes/_preview_error.html",
+                {"error": str(exc)},
+            )
+        if not css:
+            return render(
+                request,
+                "netbox_device_view/includes/_preview_error.html",
+                {"error": "Nothing to preview yet. Assign ports in the grid."},
+            )
+
+        ports = None
+        device_id = request.POST.get("device_id")
+        if device_id:
+            device = (
+                Device.objects.restrict(request.user, "view")
+                .filter(pk=device_id)
+                .first()
+            )
+            if device is not None:
+                ports = collect_device_ports(device)
+        if ports is None:
+            device_type = DeviceType.objects.filter(
+                pk=request.POST.get("device_type_id") or 0
+            ).first()
+            if device_type is None:
+                return render(
+                    request,
+                    "netbox_device_view/includes/_preview_error.html",
+                    {"error": "Select a reference device type to preview."},
+                )
+            ports = build_template_ports(device_type)
+
+        return HttpResponse(
+            render_layout_preview(css, ports, request.POST.get("display_size", "medium"))
+        )
+
+
+class DeviceTypeDevicesView(DjangoView):
+    """List devices of a device type, for the builder's reference-device picker."""
+
+    def get(self, request, pk):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required"}, status=403)
+        devices = (
+            Device.objects.restrict(request.user, "view")
+            .filter(device_type_id=pk)
+            .select_related("site")
+            .order_by("name")[:100]
+        )
+        return JsonResponse(
+            {
+                "devices": [
+                    {"id": d.pk, "name": f"{d.name or d.pk} ({d.site})"} for d in devices
+                ]
+            }
+        )
 
 
 @register_model_view(Device, "deviceview", path="device-view")
@@ -156,9 +276,7 @@ class SiteDeviceElevationView(generic.ObjectView):
                 'interfaces__tagged_vlans',
                 # Front / rear ports
                 'frontports__cable',
-                'frontports___link_peer_type',
                 'rearports__cable',
-                'rearports___link_peer_type',
                 # Console ports (replaces per-device ConsolePort.objects.filter())
                 'consoleports',
                 # Virtual-chassis members and their sub-relations
@@ -216,6 +334,7 @@ class SiteDeviceElevationView(generic.ObjectView):
 
         return {
             'prepared_devices': prepared_devices_data,
+            'missing_devices': get_devices_missing_view(instance),
             'title': 'Port View',
             'cable_colors': request.GET.get("cable_colors", "vlan_role"),
             'port_type': request.GET.get("port_type", "vlan_letter"),
