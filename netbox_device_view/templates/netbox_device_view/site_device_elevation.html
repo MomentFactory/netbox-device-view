@@ -5,33 +5,24 @@
 
 {% block content %}
 {% if missing_devices %}
-<div class="accordion mt-3" id="missing-device-views">
-    <div class="accordion-item border-warning">
-        <h2 class="accordion-header">
-            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#missing-device-views-body" aria-expanded="false" aria-controls="missing-device-views-body">
-                <i class="mdi mdi-alert text-warning me-2"></i>
-                <span>
-                    <strong>Missing device views</strong><br>
-                    <small class="text-muted">Some devices not shown, as they are missing port mappings.</small>
-                </span>
-            </button>
-        </h2>
-        <div id="missing-device-views-body" class="accordion-collapse collapse" data-bs-parent="#missing-device-views">
-            <ul class="list-group list-group-flush">
-                {% for entry in missing_devices %}
-                <li class="list-group-item d-flex justify-content-between align-items-start">
-                    <div>
-                        <a href="{{ entry.device_type.get_absolute_url }}"><strong>{{ entry.device_type }}</strong></a>
-                        <span class="text-muted">({{ entry.devices|length }})</span>:
-                        {% for device in entry.devices %}<a href="{{ device.get_absolute_url }}">{{ device.name|default:device.pk }}</a> <small class="text-muted">{{ device.role }}</small>{% if not forloop.last %}, {% endif %}{% endfor %}
-                    </div>
-                    <a class="btn btn-sm btn-outline-warning ms-3 text-nowrap" href="{% url 'plugins:netbox_device_view:deviceview_add' %}?device_types={{ entry.device_type.pk }}">
-                        <i class="mdi mdi-plus-thick"></i> Add view
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
+<div class="missing-views border border-warning rounded mt-3 px-2 py-1 small">
+    <a class="text-reset text-decoration-none d-block" data-bs-toggle="collapse" href="#missing-device-views-body" role="button" aria-expanded="false" aria-controls="missing-device-views-body">
+        <i class="mdi mdi-alert text-warning"></i>
+        <strong>Missing device views</strong>
+        <span class="text-muted">· Some devices not shown, as they are missing port mappings.</span>
+        <i class="mdi mdi-chevron-down text-muted"></i>
+    </a>
+    <div id="missing-device-views-body" class="collapse">
+        <ul class="list-unstyled mb-1 mt-1">
+            {% for entry in missing_devices %}
+            <li class="py-1 border-top">
+                <a href="{{ entry.device_type.get_absolute_url }}"><strong>{{ entry.device_type }}</strong></a>
+                <span class="text-muted">({{ entry.devices|length }})</span>:
+                {% for device in entry.devices %}<a href="{{ device.get_absolute_url }}">{{ device.name|default:device.pk }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                <a class="ms-2 text-warning text-nowrap" href="{% url 'plugins:netbox_device_view:deviceview_add' %}?device_types={{ entry.device_type.pk }}"><i class="mdi mdi-plus-thick"></i>Add view</a>
+            </li>
+            {% endfor %}
+        </ul>
     </div>
 </div>
 {% endif %}
