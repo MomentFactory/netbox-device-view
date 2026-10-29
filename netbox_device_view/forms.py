@@ -8,14 +8,15 @@ from .models import DeviceView
 from dcim.models import DeviceType
 from utilities.forms.fields import CSVModelChoiceField, CSVModelMultipleChoiceField
 from utilities.forms.widgets import APISelectMultiple
-from .utils import generate_grid_template_css, get_device_type_layout_data
+from .grid_css import generate_grid_css, normalize_config, parse_grid_css
+from .utils import get_device_type_layout_data
 
 
 class LayoutBuilderWidget(forms.Widget):
     template_name = "netbox_device_view/widgets/layout_builder.html"
 
     class Media:
-        css = {"all": ("netbox_device_view/css/layout_builder.css",)}
+        css = {"all": ("netbox_device_view/css/device_view.css", "netbox_device_view/css/layout_builder.css")}
         js = ("netbox_device_view/js/layout_builder.js",)
 
     def get_context(self, name, value, attrs):
@@ -58,7 +59,10 @@ class LayoutBuilderWidget(forms.Widget):
             "plugins:netbox_device_view:devicetype_devices",
             kwargs={"pk": 0},
         ).replace("/0/", "/__device_type_id__/")
-        context["existing_grid_template_area"] = existing_grid_template_area
+        context["parse_url"] = reverse("plugins:netbox_device_view:deviceview_parse_css")
+        # The saved CSS is the source of truth: open whatever is stored, including
+        # hand-written layouts with module or front/rear variants.
+        context["initial_layout"] = parse_grid_css(existing_grid_template_area)
         return context
 
 
@@ -121,24 +125,37 @@ class DeviceViewForm(NetBoxModelForm):
         return device_types
 
     def clean(self):
-        cleaned_data = super().clean()
-        layout_config = cleaned_data.get("layout_config") or {}
+        super().clean()  # NetBoxModelForm.clean() returns None
+        cleaned_data = self.cleaned_data
+        layout_config = normalize_config(cleaned_data.get("layout_config"))
+        submitted_css = (cleaned_data.get("grid_template_area") or "").strip()
 
-        if layout_config.get("mode") == "builder":
-            try:
-                cleaned_data["grid_template_area"] = generate_grid_template_css(layout_config)
-            except ValueError as exc:
-                self.add_error("layout_config", str(exc))
-        elif not cleaned_data.get("grid_template_area"):
-            self.add_error("grid_template_area", "Enter CSS here or enable the visual layout builder.")
+        if layout_config is None:
+            if not submitted_css:
+                self.add_error("grid_template_area", "Enter CSS here or build a layout with the visual builder.")
+            return cleaned_data
 
+        try:
+            generated_css = generate_grid_css(layout_config)
+        except ValueError as exc:
+            self.add_error("layout_config", str(exc))
+            return cleaned_data
+
+        if submitted_css and submitted_css != generated_css.strip():
+            # The Advanced CSS was edited after the builder last synced it:
+            # keep the hand edit and rebuild the builder config from it.
+            parsed = parse_grid_css(submitted_css)
+            layout_config.update(layouts=parsed["layouts"], extra_css=parsed["extra_css"])
+        else:
+            cleaned_data["grid_template_area"] = generated_css
+
+        cleaned_data["layout_config"] = layout_config
         return cleaned_data
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        layout_config = self.cleaned_data.get("layout_config") or {}
-        if layout_config.get("mode") == "builder":
-            instance.grid_template_area = self.cleaned_data["grid_template_area"]
+        instance.grid_template_area = self.cleaned_data["grid_template_area"]
+        instance.layout_config = self.cleaned_data.get("layout_config") or {}
 
         if commit:
             instance.save()

@@ -1,12 +1,13 @@
 {% comment %}
-Preview fragment: CSS is already scoped under .dv-preview by the view.
-Expects: css, cell, ports, display_size, link_type, cable_colors, port_type.
+Preview fragment for one layout variant; CSS is already scoped under .dv-preview by the view.
+Expects: css, cell, ports, unplaced, unmatched, display_size, link_type, cable_colors, port_type.
 {% endcomment %}
 <style>
     {% autoescape off %}{{ css }}{% endautoescape %}
     .dv-preview .deviceview {
         height: auto;
         width: max-content;
+        max-width: none;
         margin: 0;
         grid-auto-columns: {{ cell }}px;
         grid-auto-rows: {{ cell }}px;
@@ -18,8 +19,15 @@ Expects: css, cell, ports, display_size, link_type, cable_colors, port_type.
         align-items: center;
         height: 100%;
         width: 100%;
+        overflow: hidden;
     }
 </style>
 <div class="dv-preview" style="overflow-x: auto;">
     {% include 'netbox_device_view/includes/_device_panel.html' with device_identifier=1 all_modules_data=None interfaces_for_panel=ports link_type=link_type cable_colors=cable_colors port_type=port_type display_size=display_size %}
 </div>
+{% if unplaced or unmatched %}
+<div class="small text-muted mt-2">
+    {% if unplaced %}<span class="me-3"><i class="mdi mdi-information-outline"></i> {{ unplaced }} port{{ unplaced|pluralize }} not placed in this variant.</span>{% endif %}
+    {% if unmatched %}<span class="text-warning"><i class="mdi mdi-alert-outline"></i> No port named: {{ unmatched|join:", " }}</span>{% endif %}
+</div>
+{% endif %}

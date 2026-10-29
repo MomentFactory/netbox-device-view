@@ -12,7 +12,14 @@ from .utils import (
     apply_css_prefix,
     build_template_ports,
     collect_device_ports,
-    generate_grid_template_css,
+)
+from .grid_css import (
+    BASE_SELECTOR,
+    EMPTY_TOKEN,
+    area_problems,
+    generate_layout_css,
+    normalize_config,
+    parse_grid_css,
 )
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
@@ -30,15 +37,23 @@ from .forms import DeviceViewImportForm
 PREVIEW_CELL_SIZES = {"small": 20, "medium": 40, "large": 60}
 
 
-def render_layout_preview(css, ports, display_size="medium"):
-    """Render *ports* on the grid defined by *css* using the production port templates."""
+def render_layout_preview(layout, ports, display_size="medium"):
+    """
+    Render one layout variant with the production port templates.  Only ports
+    placed in the grid are drawn; the rest would be auto-placed into extra
+    implicit grid tracks and distort the preview.
+    """
     cell = PREVIEW_CELL_SIZES.get(display_size, 40)
+    placed = {token for row in layout["grid"] for token in row if token != EMPTY_TOKEN}
+    shown = [port for port in ports if port.stylename in placed]
     return render_to_string(
         "netbox_device_view/includes/_preview.html",
         {
-            "css": apply_css_prefix(css, "dv-preview"),
+            "css": apply_css_prefix(generate_layout_css(layout, selector=BASE_SELECTOR), "dv-preview"),
             "cell": cell,
-            "ports": ports,
+            "ports": shown,
+            "unplaced": len(ports) - len(shown),
+            "unmatched": sorted(placed - {port.stylename for port in ports}),
             "display_size": display_size if display_size in PREVIEW_CELL_SIZES else "medium",
             "link_type": "interface",
             "cable_colors": "vlan_role",
@@ -53,12 +68,19 @@ class DeviceViewView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         device_type = instance.device_types.first()
-        preview = ""
-        if device_type is not None and instance.grid_template_area:
-            preview = render_layout_preview(
-                instance.grid_template_area, build_template_ports(device_type)
-            )
-        return {"preview": preview, "preview_device_type": device_type}
+        parsed = parse_grid_css(instance.grid_template_area)
+        previews = []
+        if device_type is not None:
+            ports = build_template_ports(device_type)
+            previews = [
+                {"label": layout["label"] or layout["selector"], "html": render_layout_preview(layout, ports)}
+                for layout in parsed["layouts"]
+            ]
+        return {
+            "previews": previews,
+            "preview_device_type": device_type,
+            "layouts": parsed["layouts"],
+        }
 
 
 class DeviceViewListView(generic.ObjectListView):
@@ -70,6 +92,11 @@ class DeviceViewEditView(generic.ObjectEditView):
     queryset = models.DeviceView.objects
     form = forms.DeviceViewForm
     template_name = "netbox_device_view/deviceview_edit.html"
+
+    def get_extra_context(self, request, instance):
+        from . import config
+
+        return {"plugin_version": config.version}
 
 
 class DeviceViewBulkImportView(BulkImportView):
@@ -100,8 +127,24 @@ class DeviceTypeLayoutDataView(DjangoView):
         return JsonResponse(get_device_type_layout_data(device_type))
 
 
+def _preview_error(request, message):
+    return render(request, "netbox_device_view/includes/_preview_error.html", {"error": message})
+
+
+class DeviceViewParseCssView(DjangoView):
+    """Parse DeviceView CSS into builder layouts (used when the Advanced CSS is edited)."""
+
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return JsonResponse({"error": "Authentication required"}, status=403)
+        parsed = parse_grid_css(request.POST.get("css", ""))
+        if not parsed["layouts"]:
+            return JsonResponse({"error": "No grid-template-areas rule found in this CSS."}, status=400)
+        return JsonResponse(parsed)
+
+
 class DeviceViewPreviewView(DjangoView):
-    """Render an HTML fragment previewing a (possibly unsaved) layout."""
+    """Render an HTML fragment previewing one variant of a (possibly unsaved) layout."""
 
     def post(self, request):
         if not request.user.is_authenticated:
@@ -110,52 +153,39 @@ class DeviceViewPreviewView(DjangoView):
             return JsonResponse({"error": "Permission denied"}, status=403)
 
         try:
-            layout_config = json.loads(request.POST.get("layout_config") or "{}")
+            config = normalize_config(json.loads(request.POST.get("layout_config") or "{}"))
         except json.JSONDecodeError:
             return HttpResponseBadRequest("Invalid layout_config")
+        layouts = config["layouts"] if config else parse_grid_css(request.POST.get("grid_template_area"))["layouts"]
+        if not layouts:
+            return _preview_error(request, "Nothing to preview yet. Assign ports in the grid.")
 
         try:
-            css = generate_grid_template_css(layout_config) or request.POST.get(
-                "grid_template_area", ""
-            )
-        except (ValueError, TypeError) as exc:
-            return render(
+            layout = layouts[int(request.POST.get("variant") or 0)]
+        except (ValueError, IndexError):
+            layout = layouts[0]
+
+        problems = area_problems(layout["grid"])
+        if problems:
+            return _preview_error(
                 request,
-                "netbox_device_view/includes/_preview_error.html",
-                {"error": str(exc)},
-            )
-        if not css:
-            return render(
-                request,
-                "netbox_device_view/includes/_preview_error.html",
-                {"error": "Nothing to preview yet. Assign ports in the grid."},
+                "The browser would ignore this grid: "
+                + " ".join(f"'{token}' {problem}" for token, problem in problems.items()),
             )
 
         ports = None
         device_id = request.POST.get("device_id")
         if device_id:
-            device = (
-                Device.objects.restrict(request.user, "view")
-                .filter(pk=device_id)
-                .first()
-            )
+            device = Device.objects.restrict(request.user, "view").filter(pk=device_id).first()
             if device is not None:
                 ports = collect_device_ports(device)
         if ports is None:
-            device_type = DeviceType.objects.filter(
-                pk=request.POST.get("device_type_id") or 0
-            ).first()
+            device_type = DeviceType.objects.filter(pk=request.POST.get("device_type_id") or 0).first()
             if device_type is None:
-                return render(
-                    request,
-                    "netbox_device_view/includes/_preview_error.html",
-                    {"error": "Select a reference device type to preview."},
-                )
+                return _preview_error(request, "Select a reference device type to preview.")
             ports = build_template_ports(device_type)
 
-        return HttpResponse(
-            render_layout_preview(css, ports, request.POST.get("display_size", "medium"))
-        )
+        return HttpResponse(render_layout_preview(layout, ports, request.POST.get("display_size", "medium")))
 
 
 class DeviceTypeDevicesView(DjangoView):

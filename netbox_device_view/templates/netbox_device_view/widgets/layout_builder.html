@@ -3,8 +3,8 @@
 
 {{ device_type_layout_data|json_script:"device-layout-data" }}
 {{ device_type_options|json_script:"device-layout-options" }}
-{{ existing_grid_template_area|json_script:"device-grid-template-area" }}
-<div class="device-layout-builder" data-layout-builder data-layout-data-url-template="{{ layout_data_url_template }}" data-default-device-type-id="{{ default_device_type_id }}" data-preview-url="{{ preview_url }}" data-devices-url-template="{{ devices_url_template }}">
+{{ initial_layout|json_script:"device-layout-initial" }}
+<div class="device-layout-builder" data-layout-builder data-layout-data-url-template="{{ layout_data_url_template }}" data-default-device-type-id="{{ default_device_type_id }}" data-preview-url="{{ preview_url }}" data-parse-url="{{ parse_url }}" data-devices-url-template="{{ devices_url_template }}">
     <input type="hidden" name="{{ widget.name }}" value="{{ widget.value }}"{% include "django/forms/widgets/attrs.html" %} data-layout-config-input>
 
     <div class="card border mb-3">
@@ -13,7 +13,7 @@
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-4">
+                <div class="col-md-5">
                     <label class="form-label" for="{{ widget.attrs.id }}_device_type">Reference device type</label>
                     <select class="form-select" id="{{ widget.attrs.id }}_device_type" data-device-type-select>
                         <option value="">Select a device type</option>
@@ -21,23 +21,16 @@
                             <option value="{{ device_type.id }}">{{ device_type.model }}</option>
                         {% endfor %}
                     </select>
-                    <div class="form-text">Used only to populate template dropdowns and front-panel reference.</div>
-                    <label class="form-label mt-2" for="{{ widget.attrs.id }}_ref_device">Reference device (optional)</label>
+                    <div class="form-text">Supplies the port names, front-panel image and preview ports.</div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label" for="{{ widget.attrs.id }}_ref_device">Reference device (optional)</label>
                     <select class="form-select" id="{{ widget.attrs.id }}_ref_device" data-reference-device>
                         <option value="">None - use device type templates</option>
                     </select>
                     <div class="form-text">A real device of that type; the preview shows its VLANs and cabling.</div>
                 </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="{{ widget.attrs.id }}_columns">Columns</label>
-                    <input class="form-control" id="{{ widget.attrs.id }}_columns" data-columns type="number" min="1" value="32">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="{{ widget.attrs.id }}_rows">Rows</label>
-                    <input class="form-control" id="{{ widget.attrs.id }}_rows" data-rows type="number" min="1" value="2" readonly>
-                    <div class="form-text">Derived from device type U height.</div>
-                </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label">Auto-fill path</label>
                     <div class="layout-builder-patterns" data-fill-pattern>
                         <button class="layout-pattern active" type="button" data-pattern="paired" aria-pressed="true" title="Pair columns">
@@ -61,6 +54,46 @@
                 <div class="layout-builder-image-empty" data-front-image-empty>Select a reference device type to show its front-panel image.</div>
             </div>
 
+            <div class="layout-builder-variants mt-3">
+                <ul class="nav nav-tabs" data-variant-tabs role="tablist"></ul>
+                <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="mdi mdi-plus-thick"></i> Variant
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button class="dropdown-item" type="button" data-add-variant="module">Module installed&hellip;</button></li>
+                        <li><button class="dropdown-item" type="button" data-add-variant="front">Front side (patch panel)</button></li>
+                        <li><button class="dropdown-item" type="button" data-add-variant="rear">Rear side (patch panel)</button></li>
+                        <li><button class="dropdown-item" type="button" data-add-variant="custom">Custom selector&hellip;</button></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="layout-builder-variant-settings" data-variant-settings>
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_variant_label">Label</label>
+                    <input class="form-control form-control-sm" id="{{ widget.attrs.id }}_variant_label" data-variant-label type="text" placeholder="e.g. C9300-24T with C9300-NM-8X">
+                </div>
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_variant_selector">CSS selector</label>
+                    <input class="form-control form-control-sm font-monospace" id="{{ widget.attrs.id }}_variant_selector" data-variant-selector type="text">
+                </div>
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_rows">Rows</label>
+                    <input class="form-control form-control-sm" id="{{ widget.attrs.id }}_rows" data-rows type="number" min="1" value="2">
+                </div>
+                <div>
+                    <label class="form-label" for="{{ widget.attrs.id }}_columns">Columns</label>
+                    <input class="form-control form-control-sm" id="{{ widget.attrs.id }}_columns" data-columns type="number" min="1" value="32">
+                </div>
+                <button class="btn btn-sm btn-outline-danger align-self-end" type="button" data-remove-variant title="Remove this variant">
+                    <i class="mdi mdi-trash-can-outline"></i>
+                </button>
+                <details class="layout-builder-declarations">
+                    <summary class="small">Extra CSS declarations</summary>
+                    <textarea class="form-control form-control-sm font-monospace mt-1" rows="3" data-variant-declarations placeholder="grid-auto-rows: auto;"></textarea>
+                </details>
+            </div>
+
             <div class="layout-builder-toolbar mt-3">
                 <div>
                     <label class="form-label" for="{{ widget.attrs.id }}_start_column">Start column</label>
@@ -79,7 +112,7 @@
                     <label class="form-check-label" for="{{ widget.attrs.id }}_reverse">Reverse order</label>
                 </div>
                 <button class="btn btn-primary align-self-end" type="button" data-autofill>Auto-fill interfaces</button>
-                <button class="btn btn-outline-secondary align-self-end" type="button" data-fill-blanks>Fill blanks</button>
+                <button class="btn btn-outline-secondary align-self-end" type="button" data-match-legacy hidden>Match legacy names</button>
                 <button class="btn btn-outline-danger align-self-end" type="button" data-clear-grid>Clear grid</button>
             </div>
 
@@ -91,24 +124,36 @@
                 <input type="range" class="form-range" min="10" max="90" value="45" data-overlay-opacity aria-label="Overlay opacity" disabled>
             </div>
 
+            <div class="layout-builder-status mt-2" data-status></div>
+
             <div class="layout-builder-grid-wrap mt-2">
                 <div class="layout-builder-grid-stack">
                     <div class="layout-builder-grid" data-grid></div>
                     <img class="layout-builder-overlay-img" alt="" data-overlay-img hidden>
                 </div>
             </div>
+            <div class="layout-builder-legend small text-muted mt-1">
+                <span class="legend-swatch is-interface"></span> Port
+                <span class="legend-swatch is-unmatched"></span> No such port on the reference type
+                <span class="legend-swatch is-invalid"></span> Breaks the grid (must be a rectangle)
+            </div>
 
             <div class="layout-builder-cell-editor mt-3" data-cell-editor hidden>
                 <div>
                     <strong data-selected-cell-label>Selected cell</strong>
-                    <div class="text-muted small">Assign one interface, spacer, or empty marker to the selected grid cell.</div>
+                    <div class="text-muted small">Assign a port or Empty. Repeat a port in adjacent cells to make it span.</div>
                 </div>
                 <select class="form-select" data-cell-token-select></select>
             </div>
 
+            <div class="layout-builder-unplaced mt-3" data-unplaced hidden>
+                <div class="small fw-bold mb-1" data-unplaced-title></div>
+                <div class="layout-builder-unplaced-list" data-unplaced-list></div>
+            </div>
+
             <div class="card border mt-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong>Live preview</strong>
+                    <strong>Live preview <span class="fw-normal text-muted" data-preview-variant></span></strong>
                     <select class="form-select form-select-sm w-auto" data-preview-size aria-label="Preview size">
                         <option value="small">Small</option>
                         <option value="medium" selected>Medium</option>
@@ -119,11 +164,6 @@
                     <span class="text-muted">Assign ports in the grid to see a preview.</span>
                 </div>
             </div>
-
-            <details class="mt-3">
-                <summary>Generated CSS preview</summary>
-                <pre class="layout-builder-css-preview" data-css-preview></pre>
-            </details>
         </div>
     </div>
 </div>

@@ -16,6 +16,11 @@ urlpatterns = (
         name="devicetype_devices",
     ),
     path(
+        "device-view/parse-css/",
+        views.DeviceViewParseCssView.as_view(),
+        name="deviceview_parse_css",
+    ),
+    path(
         "device-view/preview/",
         views.DeviceViewPreviewView.as_view(),
         name="deviceview_preview",

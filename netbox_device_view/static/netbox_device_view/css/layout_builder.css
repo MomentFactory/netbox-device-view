@@ -232,3 +232,85 @@ body.theme-dark .device-layout-builder {
 .device-layout-builder .layout-builder-overlay-controls .form-range {
     max-width: 12rem;
 }
+
+.device-layout-builder .layout-builder-cell.is-unmatched {
+    background: #8a6100;
+    border-color: #ffc107;
+    color: #fff;
+}
+
+.device-layout-builder .layout-builder-cell.is-invalid {
+    background: #842029;
+    border-color: #dc3545;
+    color: #fff;
+}
+
+.device-layout-builder .layout-builder-variants {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--dv-builder-border);
+}
+
+.device-layout-builder .layout-builder-variants .nav-tabs {
+    border-bottom: 0;
+    flex-wrap: wrap;
+}
+
+.device-layout-builder .layout-builder-variants .dropdown {
+    margin-bottom: 0.35rem;
+}
+
+.device-layout-builder .layout-builder-variant-settings {
+    display: grid;
+    grid-template-columns: minmax(10rem, 2fr) minmax(12rem, 2fr) 6rem 6rem auto;
+    gap: 0.5rem 0.75rem;
+    padding: 0.75rem;
+    border: 1px solid var(--dv-builder-border);
+    border-top: 0;
+    border-radius: 0 0 0.375rem 0.375rem;
+    background: var(--dv-builder-soft-bg);
+}
+
+.device-layout-builder .layout-builder-declarations {
+    grid-column: 1 / -1;
+}
+
+.device-layout-builder .layout-builder-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+}
+
+.device-layout-builder .legend-swatch {
+    display: inline-block;
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 0.2rem;
+    margin-left: 0.5rem;
+    border: 1px solid var(--dv-builder-border);
+}
+
+.device-layout-builder .legend-swatch.is-interface { background: var(--dv-builder-interface-bg); }
+.device-layout-builder .legend-swatch.is-unmatched { background: #8a6100; }
+.device-layout-builder .legend-swatch.is-invalid { background: #842029; }
+
+.device-layout-builder .layout-builder-unplaced[hidden] {
+    display: none;
+}
+
+.device-layout-builder .layout-builder-unplaced-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    max-height: 9rem;
+    overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+    .device-layout-builder .layout-builder-variant-settings {
+        grid-template-columns: 1fr 1fr;
+    }
+}

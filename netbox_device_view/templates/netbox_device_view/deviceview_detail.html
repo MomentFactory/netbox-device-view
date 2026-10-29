@@ -28,11 +28,11 @@
         <tr>
           <th scope="row">Layout</th>
           <td>
-            {% if object.layout_config.mode == "builder" %}
-              {{ object.layout_config.rows }} &times; {{ object.layout_config.columns }} (visual builder)
-            {% else %}
+            {% for layout in layouts %}
+              {{ layout.label|default:layout.selector }}: {{ layout.rows }} &times; {{ layout.columns }}{% if not forloop.last %}<br>{% endif %}
+            {% empty %}
               Custom CSS
-            {% endif %}
+            {% endfor %}
           </td>
         </tr>
       </table>
@@ -46,7 +46,12 @@
     <div class="card">
       <h2 class="card-header">Preview{% if preview_device_type %} <small class="text-muted fw-light">{{ preview_device_type }}</small>{% endif %}</h2>
       <div class="card-body">
-        {% if preview %}{{ preview|safe }}{% else %}<span class="text-muted">No preview available.</span>{% endif %}
+        {% for preview in previews %}
+          {% if previews|length > 1 %}<h6 class="mt-2">{{ preview.label }}</h6>{% endif %}
+          {{ preview.html|safe }}
+        {% empty %}
+          <span class="text-muted">No preview available.</span>
+        {% endfor %}
       </div>
     </div>
   </div>

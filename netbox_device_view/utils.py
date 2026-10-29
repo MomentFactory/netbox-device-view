@@ -8,12 +8,6 @@ import re
 from types import SimpleNamespace
 
 
-EMPTY_AREA_TOKENS = {".", "x", "z"}
-SPACE_AREA_TOKEN = "__space__"
-SPACER_AREA_PATTERN = re.compile(r"^s\d+$")
-CSS_AREA_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_-]*$")
-
-
 # ---------------------------------------------------------------------------
 # Query-count helpers
 # ---------------------------------------------------------------------------
@@ -212,60 +206,12 @@ def normalize_grid_area_name(name, fallback=None):
     return stylename
 
 
-def css_grid_area_is_safe(token):
-    return token in EMPTY_AREA_TOKENS or token == SPACE_AREA_TOKEN or SPACER_AREA_PATTERN.match(token) or CSS_AREA_PATTERN.match(token)
-
-
-def _is_builder_empty_token(token):
-    return not token or token in EMPTY_AREA_TOKENS or token == SPACE_AREA_TOKEN or SPACER_AREA_PATTERN.match(token)
-
-
-def render_builder_grid_rows(grid):
-    """Convert editable builder tokens into CSS grid-area rows."""
-    spacer_names = {}
-    spacer_count = 0
-    rendered_grid = []
-
-    for row in grid:
-        first_component = -1
-        last_component = -1
-
-        for column_index, token in enumerate(row):
-            token = str(token or ".").strip()
-            if not _is_builder_empty_token(token):
-                if first_component == -1:
-                    first_component = column_index
-                last_component = column_index
-
-        rendered_row = []
-        for column_index, token in enumerate(row):
-            token = str(token or ".").strip()
-
-            if token in {"x", "z"}:
-                rendered_row.append(token)
-                continue
-
-            if token == ".":
-                if first_component == -1 or column_index < first_component:
-                    rendered_row.append("x")
-                    continue
-                if column_index > last_component:
-                    rendered_row.append("z")
-                    continue
-
-            if token == "." or token == SPACE_AREA_TOKEN or SPACER_AREA_PATTERN.match(token):
-                spacer_key = (column_index, "auto" if token == "." else "space")
-                if spacer_key not in spacer_names:
-                    spacer_names[spacer_key] = f"s{spacer_count}"
-                    spacer_count += 1
-                rendered_row.append(spacer_names[spacer_key])
-                continue
-
-            rendered_row.append(token)
-
-        rendered_grid.append(rendered_row)
-
-    return rendered_grid
+def port_area_name(name):
+    """Area name used for front, rear and console ports (see process_ports)."""
+    stylename = re.sub(r"[^.a-zA-Z\d]", "-", str(name or "").lower())
+    if stylename.isdigit():
+        stylename = f"p{stylename}"
+    return stylename
 
 
 def get_device_type_layout_data(device_type):
@@ -283,11 +229,11 @@ def get_device_type_layout_data(device_type):
 
         return template_model.objects.filter(device_type=device_type).order_by("name")
 
-    def _template_payload(template):
+    def _template_payload(template, port=False):
         return {
             "id": template.pk,
             "name": template.name,
-            "area": normalize_grid_area_name(template.name, template.pk),
+            "area": port_area_name(template.name) if port else normalize_grid_area_name(template.name, template.pk),
             "type": getattr(template, "type", "") or "",
         }
 
@@ -312,51 +258,18 @@ def get_device_type_layout_data(device_type):
             if _is_physical_interface_template(template)
         ],
         "front_ports": [
-            _template_payload(template)
+            _template_payload(template, port=True)
             for template in _templates("FrontPortTemplate", "front_port_templates", "frontporttemplates")
         ],
         "rear_ports": [
-            _template_payload(template)
+            _template_payload(template, port=True)
             for template in _templates("RearPortTemplate", "rear_port_templates", "rearporttemplates")
         ],
         "console_ports": [
-            _template_payload(template)
+            _template_payload(template, port=True)
             for template in _templates("ConsolePortTemplate", "console_port_templates", "consoleporttemplates")
         ],
     }
-
-
-def generate_grid_template_css(layout_config):
-    """Convert a layout-builder config into the CSS consumed by existing views."""
-    if not layout_config or layout_config.get("mode") != "builder":
-        return ""
-
-    rows = int(layout_config.get("rows") or 2)
-    columns = int(layout_config.get("columns") or 32)
-    grid = layout_config.get("grid") or []
-
-    if rows < 1 or columns < 1:
-        raise ValueError("Rows and columns must be greater than zero.")
-    if len(grid) != rows:
-        raise ValueError(f"Expected {rows} grid rows, found {len(grid)}.")
-
-    validated_grid = []
-    for row_index, row in enumerate(grid, start=1):
-        if len(row) != columns:
-            raise ValueError(f"Expected {columns} columns in row {row_index}, found {len(row)}.")
-
-        validated_row = []
-        for token in row:
-            token = str(token or ".").strip()
-            if not css_grid_area_is_safe(token):
-                raise ValueError(f"Invalid grid area token: {token}")
-            validated_row.append(token)
-        validated_grid.append(validated_row)
-
-    rendered_rows = ['"' + " ".join(row) + '"' for row in render_builder_grid_rows(validated_grid)]
-
-    css_rows = "\n    ".join(rendered_rows)
-    return ".deviceview.area {\n    grid-template-areas:\n    " + css_rows + ";\n}"
 
 
 def process_interfaces(interfaces, ports_chassis, dev):
@@ -433,9 +346,7 @@ def process_ports(ports, ports_chassis, dev):
             if port.type == "virtual":
                 continue
             port.is_port = True
-            port.stylename = re.sub(r"[^.a-zA-Z\d]", "-", port.name.lower())
-            if port.stylename.isdigit():
-                port.stylename = f"p{port.stylename}"
+            port.stylename = port_area_name(port.name)
 
             # Extract port number from port name
             port.port_number = extract_port_number(port.name)

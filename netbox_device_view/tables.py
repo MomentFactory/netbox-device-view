@@ -1,6 +1,7 @@
 import django_tables2 as tables
 
 from netbox.tables import NetBoxTable, ChoiceFieldColumn
+from .grid_css import describe_grid_css
 from .models import DeviceView
 
 
@@ -26,15 +27,8 @@ class DeviceViewTable(NetBoxTable):
         verbose_name="Device Types",
         orderable=False,
     )
-    layout = tables.TemplateColumn(
-        template_code="""
-        {% if record.layout_config.mode == "builder" %}
-            {{ record.layout_config.rows }} &times; {{ record.layout_config.columns }}
-            <span class="badge text-bg-blue">builder</span>
-        {% else %}
-            <span class="badge text-bg-secondary">custom CSS</span>
-        {% endif %}
-        """,
+    layout = tables.Column(
+        accessor="grid_template_area",
         verbose_name="Layout",
         orderable=False,
     )
@@ -49,3 +43,6 @@ class DeviceViewTable(NetBoxTable):
         model = DeviceView
         fields = ("pk", "id", "name", "device_types", "layout", "grid_template_area")
         default_columns = ("id", "name", "device_types", "layout")
+
+    def render_layout(self, value):
+        return describe_grid_css(value)
