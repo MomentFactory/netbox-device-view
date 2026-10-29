@@ -5,8 +5,31 @@ Expects the following context variables to be set for selected options:
 - port_type
 - cable_colors
 - link_type
+- show, sort, show_site_filters (site Ports page only)
 {% endcomment %}
 <div class="row">
+    {% if show_site_filters %}
+    <div class="col-md-3">
+        <div class="form-group mt-3">
+            <label for="show" class="form-check-label mb-2">Display</label>
+            <select name="show" id="show" class="form-control mb-3" onChange="this.form.submit()">
+                <option value="both" {% if show == "both" %}selected{% endif %}>Both</option>
+                <option value="network" {% if show == "network" %}selected{% endif %}>Network Devices</option>
+                <option value="patch" {% if show == "patch" %}selected{% endif %}>Patch Panels</option>
+            </select>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="form-group mt-3">
+            <label for="sort" class="form-check-label mb-2">Sort By</label>
+            <select name="sort" id="sort" class="form-control mb-3" onChange="this.form.submit()">
+                <option value="name" {% if sort == "name" %}selected{% endif %}>Device Name</option>
+                <option value="role" {% if sort == "role" %}selected{% endif %}>Role</option>
+                <option value="location" {% if sort == "location" %}selected{% endif %}>Location</option>
+            </select>
+        </div>
+    </div>
+    {% endif %}
     <div class="col-md-3">
         <div class="form-group mt-3">
             <label for="display_size" class="form-check-label mb-2">Display Size</label>

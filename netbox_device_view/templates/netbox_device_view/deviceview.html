@@ -60,10 +60,12 @@
 {% endif %}
 <div class="card">
 	<div class="card-body htmx-container">
-		{% spaceless %} {% for device_key, interfaces_list in ports_chassis.items %} Device
-		{{ device_key }}
-		{% include 'netbox_device_view/includes/_device_panel.html' with device_identifier=device_key all_modules_data=modules interfaces_for_panel=interfaces_list link_type=link_type cable_colors=cable_colors port_type=port_type display_size=display_size %}
-		{% endfor %} {% endspaceless %}
+		{% for panel in panels %}
+		{% if panel.label %}<div class="device-panel-label small text-muted mb-1">{{ panel.label }}</div>{% endif %}
+		{% spaceless %}
+		{% include 'netbox_device_view/includes/_device_panel.html' with device_identifier=panel.key all_modules_data=modules interfaces_for_panel=panel.ports link_type=link_type cable_colors=cable_colors port_type=port_type display_size=display_size %}
+		{% endspaceless %}
+		{% endfor %}
 	</div>
 </div>
 <div class="card">

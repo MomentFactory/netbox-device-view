@@ -1,5 +1,6 @@
 from netbox.views import generic
-from dcim.models import Device, DeviceType, Site, Rack
+from dcim.models import Device, DeviceType, Interface, RearPort, Site, Rack
+from django.db.models import Exists, OuterRef
 from . import forms, models, tables, filtersets
 from utilities.views import ViewTab, register_model_view
 # utilities.permissions.PermissionRequiredMixin was incorrect, removed.
@@ -12,6 +13,7 @@ from .utils import (
     apply_css_prefix,
     build_template_ports,
     collect_device_ports,
+    build_panels,
 )
 from .grid_css import (
     BASE_SELECTOR,
@@ -31,8 +33,24 @@ from django.conf import settings
 import pprint
 
 from netbox.views.generic import BulkImportView
+from utilities.paginator import EnhancedPaginator, get_paginate_count
 from .forms import DeviceViewImportForm
 
+
+# A patch panel has rear ports and no interfaces; everything else counts as a network device.
+_IS_PATCH_PANEL = Exists(RearPort.objects.filter(device=OuterRef("pk"))) & ~Exists(
+    Interface.objects.filter(device=OuterRef("pk"))
+)
+SITE_DISPLAY_FILTERS = {
+    "network": {"pk__in": Device.objects.exclude(_IS_PATCH_PANEL).values("pk")},
+    "patch": {"pk__in": Device.objects.filter(_IS_PATCH_PANEL).values("pk")},
+}
+
+SITE_SORT_ORDERS = {
+    "name": ("name", "pk"),
+    "role": ("role__name", "name", "pk"),
+    "location": ("location__name", "rack__name", "-position", "name", "pk"),
+}
 
 PREVIEW_CELL_SIZES = {"small": 20, "medium": 40, "large": 60}
 
@@ -241,6 +259,7 @@ class DeviceDeviceView(generic.ObjectView):
             "modules": modules,
             "render_height": render_height,
             "ports_chassis": ports_chassis,
+            "panels": build_panels(instance, ports_chassis or {}),
             "cable_colors": request.GET.get("cable_colors", "vlan_role"),
             "port_type": request.GET.get("port_type", "vlan_letter"),
             "display_size": display_size_param,
@@ -262,6 +281,8 @@ class SiteDeviceElevationView(generic.ObjectView):
         request.GET['site_slug'] = instance.slug
 
         site_slug = request.GET.get('site_slug')
+        show = request.GET.get("show", "both")
+        sort = request.GET.get("sort", "name")
         display_size_param = request.GET.get("display_size", "medium")
 
         if display_size_param == "small":
@@ -289,9 +310,30 @@ class SiteDeviceElevationView(generic.ObjectView):
         #   • frontports__cable / rearports__cable – lazy-loaded in template
         #   • virtual_chassis__members (+ their own sub-relations)
         # ------------------------------------------------------------------
-        devices_with_view_defined = (
+        # One entry per virtual chassis (drawing any member draws the whole
+        # stack), in the requested order, paginated like NetBox lists.
+        candidates = (
             Device.objects
             .filter(site__slug=site_slug, device_type_id__in=device_types_with_view)
+            .filter(**SITE_DISPLAY_FILTERS.get(show, {}))
+            .order_by(*SITE_SORT_ORDERS.get(sort, SITE_SORT_ORDERS["name"]))
+            .values_list("pk", "virtual_chassis_id")
+        )
+        entry_ids = []
+        seen_chassis = set()
+        for pk, chassis_id in candidates:
+            if chassis_id:
+                if chassis_id in seen_chassis:
+                    continue
+                seen_chassis.add(chassis_id)
+            entry_ids.append(pk)
+        paginator = EnhancedPaginator(entry_ids, get_paginate_count(request))
+        page = paginator.get_page(request.GET.get("page"))
+        page_ids = list(page.object_list)
+
+        devices_list = list(
+            Device.objects
+            .filter(pk__in=page_ids)
             .select_related(
                 'device_type',
                 'virtual_chassis',
@@ -317,28 +359,20 @@ class SiteDeviceElevationView(generic.ObjectView):
                 'virtual_chassis__members__interfaces__untagged_vlan__role',
                 'virtual_chassis__members__consoleports',
             )
-            [:50]
         )
-
-        # Materialise the queryset once so we can iterate it twice
-        # (once for the lookup, once for the loop below) without
-        # hitting the database a second time.
-        devices_list = list(devices_with_view_defined)
+        devices_list.sort(key=lambda device: page_ids.index(device.pk))
 
         # ------------------------------------------------------------------
-        # Step 3 – Build the DeviceView lookup in ONE query for all
-        # device_types found in the current device set.
-        # Eliminates the DeviceView.objects.filter(...).first() call that
-        # was previously issued once per device inside prepare().
+        # Build the DeviceView lookup in ONE query for all device_types on
+        # this page (including stack members), so prepare() issues no
+        # per-device DeviceView queries.
         # ------------------------------------------------------------------
-        device_type_ids = [d.device_type_id for d in devices_list]
+        device_type_ids = {d.device_type_id for d in devices_list}
+        for device in devices_list:
+            if device.virtual_chassis_id:
+                device_type_ids.update(m.device_type_id for m in device.virtual_chassis.members.all())
         dv_lookup = build_device_view_lookup(device_type_ids)
 
-        # ------------------------------------------------------------------
-        # Step 4 – Build per-device render data using the pre-fetched
-        # lookup; no additional DeviceView or ConsolePort queries are
-        # issued inside prepare() at this point.
-        # ------------------------------------------------------------------
         prepared_devices_data = []
         for device in devices_list:
             instance_id = f"dev-{device.pk}"
@@ -355,21 +389,27 @@ class SiteDeviceElevationView(generic.ObjectView):
                 )
                 prepared_devices_data.append({
                     'device_obj': device,
+                    'chassis': device.virtual_chassis,
                     'instance_id': instance_id,
                     'dv_css_map': dv_css_map,
                     'modules_map': modules_map,
-                    'ports_chassis_map': ports_chassis_map,
+                    'panels': build_panels(device, ports_chassis_map),
                     'device_render_height': device_render_height,
                 })
 
         return {
             'prepared_devices': prepared_devices_data,
-            'missing_devices': get_devices_missing_view(instance),
+            'missing_devices': get_devices_missing_view(instance, SITE_DISPLAY_FILTERS.get(show)),
             'title': 'Port View',
             'cable_colors': request.GET.get("cable_colors", "vlan_role"),
             'port_type': request.GET.get("port_type", "vlan_letter"),
             'display_size': display_size_param,
             'link_type': request.GET.get("link_type", "interface"),
+            'show': show,
+            'sort': sort,
+            'show_site_filters': True,
+            'paginator': paginator,
+            'page': page,
         }
 
     tab = ViewTab(

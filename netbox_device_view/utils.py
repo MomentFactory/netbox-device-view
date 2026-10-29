@@ -105,7 +105,32 @@ def collect_device_ports(device):
     return [port for ports in ports_chassis.values() for port in ports]
 
 
-def get_devices_missing_view(site):
+def build_panels(device, ports_chassis):
+    """
+    Turn prepare()'s ports_chassis map into an ordered list of panels with a
+    human label: stack members as "Member 2 · sw-02", extra strips as
+    "Front ports"/"Rear ports" when the device has more than one strip.
+    """
+    members = {}
+    if device.virtual_chassis_id:
+        members = {member.vc_position: member for member in device.virtual_chassis.members.all()}
+
+    panels = []
+    for key, ports in ports_chassis.items():
+        if key in members:
+            label = f"Member {key} · {members[key].name}"
+        elif key in ("Front", "Rear") and len(ports_chassis) > 1:
+            label = f"{key} ports"
+        else:
+            label = ""
+        panels.append({"key": key, "label": label, "ports": ports})
+
+    if members:
+        panels.sort(key=lambda panel: panel["key"] if isinstance(panel["key"], int) else 0)
+    return panels
+
+
+def get_devices_missing_view(site, extra_filter=None):
     """
     Return devices at *site* whose role is listed in the ``missing_view_roles``
     plugin setting but whose device type has no DeviceView mapping, grouped by
@@ -122,6 +147,7 @@ def get_devices_missing_view(site):
     devices = (
         Device.objects.filter(site=site, role__slug__in=roles)
         .filter(device_type__device_views__isnull=True)
+        .filter(**(extra_filter or {}))
         .select_related("device_type__manufacturer", "role")
         .order_by("device_type__model", "name")
     )
@@ -245,6 +271,11 @@ def get_device_type_layout_data(device_type):
     u_height = float(device_type.u_height or 1)
     rows = max(2, int(u_height * 2))
 
+    front_ports = [
+        _template_payload(template, port=True)
+        for template in _templates("FrontPortTemplate", "front_port_templates", "frontporttemplates")
+    ]
+
     return {
         "id": device_type.pk,
         "model": device_type.model,
@@ -257,11 +288,10 @@ def get_device_type_layout_data(device_type):
             for template in _templates("InterfaceTemplate", "interface_templates", "interfacetemplates")
             if _is_physical_interface_template(template)
         ],
-        "front_ports": [
-            _template_payload(template, port=True)
-            for template in _templates("FrontPortTemplate", "front_port_templates", "frontporttemplates")
-        ],
-        "rear_ports": [
+        "front_ports": front_ports,
+        # Front and rear ports share grid names and only the front is drawn,
+        # so rear ports are offered only for devices without front ports.
+        "rear_ports": [] if front_ports else [
             _template_payload(template, port=True)
             for template in _templates("RearPortTemplate", "rear_port_templates", "rearporttemplates")
         ],
@@ -427,8 +457,12 @@ def prepare(obj, instance_prefix=None, device_view_lookup=None):
             ports_chassis = process_interfaces(
                 obj.interfaces.all(), ports_chassis, obj.name
             )
-            ports_chassis = process_ports(obj.frontports.all(), ports_chassis, "Front")
-            ports_chassis = process_ports(obj.rearports.all(), ports_chassis, "Rear")
+            # Patch panels are read from the front; rear ports are only drawn
+            # when a device has no front ports at all.
+            front_ports = obj.frontports.all()
+            ports_chassis = process_ports(front_ports, ports_chassis, "Front")
+            if not front_ports:
+                ports_chassis = process_ports(obj.rearports.all(), ports_chassis, "Rear")
             ports_chassis = process_ports(
                 _console_ports(obj),
                 ports_chassis,
