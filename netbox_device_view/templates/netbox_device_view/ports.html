@@ -1,14 +1,12 @@
-{% load static %} {% block head %}
+{% load static device_view_filters %} {% block head %}
 <link
 	rel="stylesheet"
 	href="{% static 'netbox_device_view/css/device_view.css' %}"
 />
 <style>
-	{% autoescape off %}
 	{% for id, ddv in dv.items %}
-	{{ ddv }}
+	{{ ddv|css_safe }}
 	{% endfor %}
-	{% endautoescape %}
 	{% if height %}
 
 	.deviceview {

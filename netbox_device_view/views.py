@@ -18,10 +18,10 @@ from .utils import (
 from .grid_css import (
     BASE_SELECTOR,
     EMPTY_TOKEN,
-    area_problems,
     generate_layout_css,
     normalize_config,
     parse_grid_css,
+    validate_layout,
 )
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
@@ -183,13 +183,9 @@ class DeviceViewPreviewView(DjangoView):
         except (ValueError, IndexError):
             layout = layouts[0]
 
-        problems = area_problems(layout["grid"])
+        problems = validate_layout(layout)
         if problems:
-            return _preview_error(
-                request,
-                "The browser would ignore this grid: "
-                + " ".join(f"'{token}' {problem}" for token, problem in problems.items()),
-            )
+            return _preview_error(request, "This layout can't be previewed: " + " ".join(problems))
 
         ports = None
         device_id = request.POST.get("device_id")
@@ -229,7 +225,9 @@ class DeviceTypeDevicesView(DjangoView):
 
 @register_model_view(Device, "deviceview", path="device-view")
 class DeviceDeviceView(generic.ObjectView):
-    queryset = models.DeviceView.objects
+    # Device queryset so NetBox checks dcim.view_device and restricts the lookup.
+    queryset = Device.objects.all()
+    template_name = "netbox_device_view/deviceview.html"
 
     tab = ViewTab(
         label="Device View",
@@ -266,9 +264,6 @@ class DeviceDeviceView(generic.ObjectView):
             "link_type": request.GET.get("link_type", "interface"),
             "something_else": request.GET.get("something_else", "off"),
         }
-
-    def get_object(self, **kwargs):
-        return Device.objects.get(pk=kwargs.get("pk"))
 
 
 # Define the view class without decorator first
@@ -313,7 +308,7 @@ class SiteDeviceElevationView(generic.ObjectView):
         # One entry per virtual chassis (drawing any member draws the whole
         # stack), in the requested order, paginated like NetBox lists.
         candidates = (
-            Device.objects
+            Device.objects.restrict(request.user, "view")
             .filter(site__slug=site_slug, device_type_id__in=device_types_with_view)
             .filter(**SITE_DISPLAY_FILTERS.get(show, {}))
             .order_by(*SITE_SORT_ORDERS.get(sort, SITE_SORT_ORDERS["name"]))
@@ -332,7 +327,7 @@ class SiteDeviceElevationView(generic.ObjectView):
         page_ids = list(page.object_list)
 
         devices_list = list(
-            Device.objects
+            Device.objects.restrict(request.user, "view")
             .filter(pk__in=page_ids)
             .select_related(
                 'device_type',
@@ -399,7 +394,7 @@ class SiteDeviceElevationView(generic.ObjectView):
 
         return {
             'prepared_devices': prepared_devices_data,
-            'missing_devices': get_devices_missing_view(instance, SITE_DISPLAY_FILTERS.get(show)),
+            'missing_devices': get_devices_missing_view(instance, SITE_DISPLAY_FILTERS.get(show), user=request.user),
             'title': 'Port View',
             'cable_colors': request.GET.get("cable_colors", "vlan_role"),
             'port_type': request.GET.get("port_type", "vlan_letter"),

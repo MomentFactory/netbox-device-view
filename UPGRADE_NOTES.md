@@ -1,3 +1,9 @@
+# Upgrade Notes: 0.3.1 Security Fixes
+
+- **DeviceView CSS is now validated** on the model, so the UI form, CSV import and REST API all check it. CSS that contains `<`, `\`, `@import`, `url(`, `expression(`, `javascript:`, `behavior:`, `-moz-binding`, `image-set(` or `src(` is rejected. Existing rows that contain any of these still render, with `<` stripped, but must be cleaned up before they can be saved again.
+- **Device View tab** now requires `dcim.view_device` and honours object-level permissions. It no longer checks `view_deviceview`.
+- **Site Port View tab** only lists devices the user is allowed to view. Stack members of a visible virtual chassis are still drawn with that chassis.
+
 # Upgrade Notes: Multi-Device Type Support
 
 ## Overview

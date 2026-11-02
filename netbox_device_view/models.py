@@ -1,7 +1,10 @@
 from django.contrib.postgres.fields import ArrayField
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from netbox.models import NetBoxModel
+
+from .grid_css import css_problems
 
 
 class DeviceView(NetBoxModel):
@@ -27,6 +30,13 @@ class DeviceView(NetBoxModel):
 
     class Meta:
         ordering = ("id",)
+
+    def clean(self):
+        super().clean()
+        # Covers the UI form, CSV import and the REST API.
+        problems = css_problems(self.grid_template_area)
+        if problems:
+            raise ValidationError({"grid_template_area": problems})
 
     def __str__(self):
         if self.name:

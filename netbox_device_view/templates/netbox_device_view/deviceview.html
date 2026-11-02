@@ -2,6 +2,7 @@
 {% load render_table from django_tables2 %}
 {% load buttons %}
 {% load static %}
+{% load device_view_filters %}
 {% load helpers %}
 {% load plugins %}
 {% block head %}
@@ -10,11 +11,9 @@
 	href="{% static 'netbox_device_view/css/device_view.css' %}"
 />
 <style>
-	{% autoescape off %}
 	{% for id, ddv in dv.items %}
-	{{ ddv }}
+	{{ ddv|css_safe }}
 	{% endfor %}
-	{% endautoescape %}
 	{% if render_height %}
 	.deviceview {
 		height:{{ render_height }}px;

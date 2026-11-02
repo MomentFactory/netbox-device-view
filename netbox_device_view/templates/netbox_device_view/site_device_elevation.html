@@ -1,5 +1,6 @@
 {% extends 'dcim/site.html' %}
 {% load static %}
+{% load device_view_filters %}
 {% load helpers %}
 {% load plugins %}
 
@@ -73,13 +74,11 @@
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'netbox_device_view/css/device_view.css' %}" />
 <style>
-    {% autoescape off %}
     {% for data in prepared_devices %}
         {% for id, ddv_css in data.dv_css_map.items %}
-            {{ ddv_css }}
+            {{ ddv_css|css_safe }}
         {% endfor %}
     {% endfor %}
-    {% endautoescape %}
 
     .multi-device-container {
         display: flex;

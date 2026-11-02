@@ -130,7 +130,7 @@ def build_panels(device, ports_chassis):
     return panels
 
 
-def get_devices_missing_view(site, extra_filter=None):
+def get_devices_missing_view(site, extra_filter=None, user=None):
     """
     Return devices at *site* whose role is listed in the ``missing_view_roles``
     plugin setting but whose device type has no DeviceView mapping, grouped by
@@ -144,8 +144,9 @@ def get_devices_missing_view(site, extra_filter=None):
     if not roles:
         return []
 
+    devices = Device.objects.restrict(user, "view") if user is not None else Device.objects.all()
     devices = (
-        Device.objects.filter(site=site, role__slug__in=roles)
+        devices.filter(site=site, role__slug__in=roles)
         .filter(device_type__device_views__isnull=True)
         .filter(**(extra_filter or {}))
         .select_related("device_type__manufacturer", "role")

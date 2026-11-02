@@ -45,6 +45,22 @@ BASE_SELECTOR = ".deviceview.area"
 FORBIDDEN_DECLARATION_CHARS = set("{}<>")
 ROW_STRING_PATTERN = re.compile(r"\"([^\"]*)\"|'([^']*)'")
 COMMENT_PATTERN = re.compile(r"/\*.*?\*/", re.DOTALL)
+# The CSS is printed raw inside <style>: "<" could close the tag, "\" escapes
+# could hide the keywords below, and these keywords load or run external code.
+FORBIDDEN_CSS_CHARS = ("<", "\\")
+FORBIDDEN_CSS_PATTERN = re.compile(
+    r"@import|url\s*\(|expression\s*\(|javascript\s*:|behavior\s*:|-moz-binding|image-set\s*\(|src\s*\(",
+    re.IGNORECASE,
+)
+
+
+def css_problems(css):
+    """Return a list of reasons *css* is unsafe to embed in a page (empty when safe)."""
+    text = str(css or "")
+    problems = [f"CSS may not contain '{char}'." for char in FORBIDDEN_CSS_CHARS if char in text]
+    for keyword in sorted({match.group(0).lower() for match in FORBIDDEN_CSS_PATTERN.finditer(text)}):
+        problems.append(f"CSS may not contain '{keyword}'.")
+    return problems
 
 
 def is_filler(token):
@@ -161,7 +177,7 @@ def parse_grid_css(css):
 
 
 def _safe_comment(text):
-    return " ".join(str(text or "").replace("*/", "* /").split())
+    return " ".join(str(text or "").replace("*/", "* /").replace("<", " ").replace("\\", " ").split())
 
 
 def normalize_config(config):
@@ -206,6 +222,7 @@ def validate_layout(layout):
     declarations = layout.get("declarations", "")
     if FORBIDDEN_DECLARATION_CHARS & set(declarations):
         errors.append(f"{name}: extra declarations may not contain {{ }} < or >.")
+    errors.extend(f"{name}: {problem}" for problem in css_problems(declarations) if "'<'" not in problem)
     if "grid-template-areas" in declarations.lower():
         errors.append(f"{name}: put grid-template-areas in the grid, not in extra declarations.")
 
@@ -274,8 +291,9 @@ def generate_grid_css(config):
 
     blocks = [generate_layout_css(layout) for layout in config["layouts"]]
     if config["extra_css"]:
-        if "<" in config["extra_css"]:
-            raise ValueError("Extra CSS may not contain '<'.")
+        problems = css_problems(config["extra_css"])
+        if problems:
+            raise ValueError("Extra CSS: " + " ".join(problems))
         blocks.append(config["extra_css"])
     return "\n\n".join(blocks)
 

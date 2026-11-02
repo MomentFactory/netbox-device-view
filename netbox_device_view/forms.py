@@ -8,7 +8,7 @@ from .models import DeviceView
 from dcim.models import DeviceType
 from utilities.forms.fields import CSVModelChoiceField, CSVModelMultipleChoiceField
 from utilities.forms.widgets import APISelectMultiple
-from .grid_css import generate_grid_css, normalize_config, parse_grid_css
+from .grid_css import css_problems, generate_grid_css, normalize_config, parse_grid_css
 from .utils import get_device_type_layout_data
 
 
@@ -144,6 +144,10 @@ class DeviceViewForm(NetBoxModelForm):
         if submitted_css and submitted_css != generated_css.strip():
             # The Advanced CSS was edited after the builder last synced it:
             # keep the hand edit and rebuild the builder config from it.
+            problems = css_problems(submitted_css)
+            if problems:
+                self.add_error("grid_template_area", problems)
+                return cleaned_data
             parsed = parse_grid_css(submitted_css)
             layout_config.update(layouts=parsed["layouts"], extra_css=parsed["extra_css"])
         else:

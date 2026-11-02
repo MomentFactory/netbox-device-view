@@ -1,9 +1,10 @@
+{% load device_view_filters %}
 {% comment %}
 Preview fragment for one layout variant; CSS is already scoped under .dv-preview by the view.
 Expects: css, cell, ports, unplaced, unmatched, display_size, link_type, cable_colors, port_type.
 {% endcomment %}
 <style>
-    {% autoescape off %}{{ css }}{% endautoescape %}
+    {{ css|css_safe }}
     .dv-preview .deviceview {
         height: auto;
         width: max-content;

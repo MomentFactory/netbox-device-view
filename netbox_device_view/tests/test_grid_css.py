@@ -5,6 +5,7 @@ from pathlib import Path
 from netbox_device_view.grid_css import (
     EMPTY_TOKEN,
     area_problems,
+    css_problems,
     describe_grid_css,
     generate_grid_css,
     normalize_config,
@@ -128,6 +129,57 @@ class GenerateTest(unittest.TestCase):
     def test_invalid_area_name_is_rejected(self):
         with self.assertRaises(ValueError):
             generate_grid_css({"mode": "builder", "grid": [["1/0/1"]]})
+
+
+class CssSafetyTest(unittest.TestCase):
+    PAYLOADS = (
+        ".deviceview.area { color: red; }</style><script>alert(1)</script>",
+        ".deviceview.area { background: url(https://example.com/x.png); }",
+        ".deviceview.area { background: URL ( //example.com ); }",
+        "@import 'https://example.com/x.css';",
+        ".deviceview.area { width: expression(alert(1)); }",
+        ".deviceview.area { background: \\75 rl(//example.com); }",
+    )
+
+    def test_payloads_rejected(self):
+        for css in self.PAYLOADS:
+            with self.subTest(css=css):
+                self.assertTrue(css_problems(css))
+
+    def test_examples_accepted(self):
+        for name, css in example_css_files().items():
+            with self.subTest(example=name):
+                self.assertEqual(css_problems(css), [])
+
+    def test_extra_css_rejected(self):
+        for css in self.PAYLOADS:
+            with self.subTest(css=css):
+                config = {"mode": "builder", "layouts": [_layout()], "extra_css": css}
+                with self.assertRaises(ValueError):
+                    generate_grid_css(config)
+
+    def test_declarations_rejected(self):
+        layout = _layout(declarations="background: url(//example.com/x.png)")
+        self.assertTrue(validate_layout(layout))
+        with self.assertRaises(ValueError):
+            generate_grid_css({"mode": "builder", "layouts": [layout]})
+
+    def test_label_cannot_close_style(self):
+        layout = _layout(label="</style><script>alert(1)</script>")
+        css = generate_grid_css({"mode": "builder", "layouts": [layout]})
+        self.assertNotIn("<", css)
+        self.assertEqual(css_problems(css), [])
+
+
+def _layout(**overrides):
+    layout = {
+        "selector": ".deviceview.area",
+        "label": "",
+        "grid": [["gi0-1", "gi0-2"]],
+        "declarations": "",
+    }
+    layout.update(overrides)
+    return layout
 
 
 if __name__ == "__main__":
