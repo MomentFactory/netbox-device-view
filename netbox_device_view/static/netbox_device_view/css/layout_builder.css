@@ -124,6 +124,18 @@ body.theme-dark .device-layout-builder {
     min-width: 120px;
 }
 
+.device-layout-builder .layout-builder-path .layout-builder-patterns {
+    width: 12rem;
+}
+
+.device-layout-builder .layout-builder-path .layout-pattern {
+    padding: 0.3rem;
+}
+
+.device-layout-builder .layout-builder-path .layout-pattern-icon span {
+    line-height: 1.15;
+}
+
 .device-layout-builder .layout-builder-grid-wrap {
     overflow-x: auto;
     border: 1px solid var(--dv-builder-border);
@@ -222,14 +234,19 @@ body.theme-dark .device-layout-builder {
 
 .device-layout-builder .layout-builder-grid-stack {
     position: relative;
+    width: max-content;
+    min-width: 100%;
 }
 
+/* Fit-width: the image spans the grid's width at its own proportions and is
+   centred vertically; the grid itself is not resized. */
 .device-layout-builder .layout-builder-overlay-img {
     position: absolute;
-    inset: 0;
+    top: 50%;
+    left: 0;
     width: 100%;
-    height: 100%;
-    object-fit: fill;
+    height: auto;
+    transform: translateY(-50%);
     pointer-events: none;
 }
 

@@ -13,7 +13,7 @@
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <div class="col-md-5">
+                <div class="col-md-6">
                     <label class="form-label" for="{{ widget.attrs.id }}_device_type">Reference device type</label>
                     <select class="form-select" id="{{ widget.attrs.id }}_device_type" data-device-type-select>
                         <option value="">{% if device_type_options %}Select a device type{% else %}Add a device type above first{% endif %}</option>
@@ -23,29 +23,13 @@
                     </select>
                     <div class="form-text">One of this view's device types. Supplies the port names, front-panel image and preview ports.</div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-6">
                     <label class="form-label" for="{{ widget.attrs.id }}_ref_device">Reference device (optional)</label>
                     <select class="form-select" id="{{ widget.attrs.id }}_ref_device" data-reference-device>
                         <option value="">None - use device type templates</option>
                     </select>
                     <div class="form-text">A real device of that type; the preview shows its VLANs and cabling.</div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Auto-fill path</label>
-                    <div class="layout-builder-patterns" data-fill-pattern>
-                        <button class="layout-pattern active" type="button" data-pattern="paired" aria-pressed="true" title="Pair columns">
-                            <span class="layout-pattern-icon" aria-hidden="true">
-                                <span>1</span><span>3</span><span>5</span><span>2</span><span>4</span><span>6</span>
-                            </span>
-                            <span class="visually-hidden">Pair columns</span>
-                        </button>
-                        <button class="layout-pattern" type="button" data-pattern="linear" aria-pressed="false" title="Linear left to right">
-                            <span class="layout-pattern-icon" aria-hidden="true">
-                                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
-                            </span>
-                            <span class="visually-hidden">Linear left to right</span>
-                        </button>
-                    </div>
                 </div>
             </div>
 
@@ -140,6 +124,22 @@
                 <div class="form-check align-self-end mb-2">
                     <input class="form-check-input" type="checkbox" id="{{ widget.attrs.id }}_reverse" data-reverse>
                     <label class="form-check-label" for="{{ widget.attrs.id }}_reverse">Reverse order</label>
+                </div>
+            <div class="layout-builder-path">
+                <label class="form-label">Auto-fill path</label>
+                <div class="layout-builder-patterns" data-fill-pattern>
+                    <button class="layout-pattern active" type="button" data-pattern="paired" aria-pressed="true" title="Pair columns">
+                        <span class="layout-pattern-icon" aria-hidden="true">
+                            <span>1</span><span>3</span><span>5</span><span>2</span><span>4</span><span>6</span>
+                        </span>
+                        <span class="visually-hidden">Pair columns</span>
+                    </button>
+                    <button class="layout-pattern" type="button" data-pattern="linear" aria-pressed="false" title="Linear left to right">
+                        <span class="layout-pattern-icon" aria-hidden="true">
+                            <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span>
+                        </span>
+                        <span class="visually-hidden">Linear left to right</span>
+                    </button>
                 </div>
                 <button class="btn btn-primary align-self-end" type="button" data-autofill>Auto-fill interfaces</button>
                 <button class="btn btn-outline-secondary align-self-end" type="button" data-match-legacy hidden>Match legacy names</button>

@@ -745,7 +745,7 @@
             overlayControls.hidden = !hasImage;
             var isActive = hasImage && overlayToggle.checked;
             overlayOpacity.disabled = !isActive;
-            if (isActive) overlayImg.src = image.getAttribute("src");
+            if (isActive && overlayImg.getAttribute("src") !== image.getAttribute("src")) overlayImg.src = image.getAttribute("src");
             overlayImg.hidden = !isActive;
             overlayImg.style.opacity = (parseInt(overlayOpacity.value, 10) || 45) / 100;
         }
