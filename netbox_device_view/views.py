@@ -11,6 +11,8 @@ from .utils import (
     get_device_type_layout_data,
     get_devices_missing_view,
     apply_css_prefix,
+    device_css_report,
+    view_css_report,
     build_template_ports,
     collect_device_ports,
     build_panels,
@@ -98,6 +100,7 @@ class DeviceViewView(generic.ObjectView):
             "previews": previews,
             "preview_device_type": device_type,
             "layouts": parsed["layouts"],
+            "css_issues": view_css_report([instance]),
         }
 
 
@@ -263,6 +266,7 @@ class DeviceDeviceView(generic.ObjectView):
             "display_size": display_size_param,
             "link_type": request.GET.get("link_type", "interface"),
             "something_else": request.GET.get("something_else", "off"),
+            "css_issues": device_css_report(instance),
         }
 
 
@@ -394,6 +398,7 @@ class SiteDeviceElevationView(generic.ObjectView):
 
         return {
             'prepared_devices': prepared_devices_data,
+            'css_issues': view_css_report(dv_lookup.values()),
             'missing_devices': get_devices_missing_view(instance, SITE_DISPLAY_FILTERS.get(show), user=request.user),
             'title': 'Port View',
             'cable_colors': request.GET.get("cable_colors", "vlan_role"),

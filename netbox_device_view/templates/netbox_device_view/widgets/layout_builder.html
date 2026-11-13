@@ -16,12 +16,12 @@
                 <div class="col-md-5">
                     <label class="form-label" for="{{ widget.attrs.id }}_device_type">Reference device type</label>
                     <select class="form-select" id="{{ widget.attrs.id }}_device_type" data-device-type-select>
-                        <option value="">Select a device type</option>
+                        <option value="">{% if device_type_options %}Select a device type{% else %}Add a device type above first{% endif %}</option>
                         {% for device_type in device_type_options %}
                             <option value="{{ device_type.id }}">{{ device_type.model }}</option>
                         {% endfor %}
                     </select>
-                    <div class="form-text">Supplies the port names, front-panel image and preview ports.</div>
+                    <div class="form-text">One of this view's device types. Supplies the port names, front-panel image and preview ports.</div>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="{{ widget.attrs.id }}_ref_device">Reference device (optional)</label>
@@ -51,14 +51,23 @@
 
             <div class="layout-builder-image mt-3" data-front-image-wrap>
                 <img src="" alt="Device type front panel" data-front-image>
-                <div class="layout-builder-image-empty" data-front-image-empty>Select a reference device type to show its front-panel image.</div>
+                <div class="layout-builder-image-empty" data-front-image-empty>
+                    <span data-front-image-message>Select a reference device type to show its front-panel image.</span>
+                    <a class="btn btn-sm btn-outline-secondary" href="#" target="_blank" rel="noopener noreferrer" data-front-image-search hidden>
+                        <i class="mdi mdi-magnify"></i> Search for this device
+                    </a>
+                </div>
             </div>
 
             <div class="layout-builder-variants mt-3">
                 <ul class="nav nav-tabs" data-variant-tabs role="tablist"></ul>
-                <div class="dropdown">
+                <div class="d-flex align-items-center gap-1 dropdown">
+                    <button class="btn btn-sm btn-link text-secondary px-1" type="button" data-bs-toggle="collapse" data-bs-target="#{{ widget.attrs.id }}_variant_help" aria-expanded="false" aria-controls="{{ widget.attrs.id }}_variant_help" title="What are the default layout and variants?">
+                        <i class="mdi mdi-help-circle-outline fs-5"></i>
+                        <span class="visually-hidden">What are the default layout and variants?</span>
+                    </button>
                     <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="mdi mdi-plus-thick"></i> Variant
+                        <i class="mdi mdi-plus-thick"></i> Add variant
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li><button class="dropdown-item" type="button" data-add-variant="module">Module installed&hellip;</button></li>
@@ -66,6 +75,27 @@
                         <li><button class="dropdown-item" type="button" data-add-variant="rear">Rear side (patch panel)</button></li>
                         <li><button class="dropdown-item" type="button" data-add-variant="custom">Custom selector&hellip;</button></li>
                     </ul>
+                </div>
+            </div>
+            <div class="collapse" id="{{ widget.attrs.id }}_variant_help">
+                <div class="layout-builder-help small">
+                    <p class="mb-2">
+                        <strong>Default</strong> is the layout drawn for every device of this view's types.
+                        A <strong>variant</strong> is an extra layout that replaces the default only on some devices or panels,
+                        so the same view can cope with hardware that isn't always identical. Each tab is one layout.
+                    </p>
+                    <ul class="mb-2">
+                        <li><strong>Module installed</strong> &ndash; used when the device has that module, e.g. a switch with an
+                            uplink card adds the card's ports. Pick the module type and lay out the extra ports.</li>
+                        <li><strong>Front side / Rear side</strong> &ndash; patch panels are drawn as two strips, front ports and rear
+                            ports. Each strip uses its own variant (the default is used if one is missing).</li>
+                        <li><strong>Custom selector</strong> &ndash; for advanced cases: any CSS selector starting with
+                            <code>.deviceview</code>.</li>
+                    </ul>
+                    <p class="mb-0 text-muted">
+                        Most switches only need the default. When several layouts match a device, the most specific one wins
+                        (a module or side variant beats the default).
+                    </p>
                 </div>
             </div>
             <div class="layout-builder-variant-settings" data-variant-settings>

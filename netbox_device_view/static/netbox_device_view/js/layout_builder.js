@@ -96,9 +96,9 @@
     }
 
     function variantName(layout) {
-        if (layout.label) return layout.label;
         var selector = layout.selector;
-        if (selector === BASE_SELECTOR) return "Base";
+        if (selector === BASE_SELECTOR) return layout.label ? "Default · " + layout.label : "Default";
+        if (layout.label) return layout.label;
         if (/\.dFront\b/.test(selector)) return "Front";
         if (/\.dRear\b/.test(selector)) return "Rear";
         var module = selector.match(/\.module([\w-]+)/);
@@ -130,6 +130,9 @@
         var gridEl = $("[data-grid]");
         var image = $("[data-front-image]");
         var imageEmpty = $("[data-front-image-empty]");
+        var imageMessage = $("[data-front-image-message]");
+        var imageSearch = $("[data-front-image-search]");
+        var deviceTypesField = form ? form.querySelector("select[name=device_types]") : null;
         var variantTabs = $("[data-variant-tabs]");
         var variantLabel = $("[data-variant-label]");
         var variantSelector = $("[data-variant-selector]");
@@ -165,16 +168,68 @@
 
         function layout() { return layouts[active]; }
 
-        function addDeviceTypeOption(deviceType) {
-            if (deviceTypeSelect.querySelector('option[value="' + deviceType.id + '"]')) return;
-            var option = document.createElement("option");
-            option.value = deviceType.id;
-            option.textContent = deviceType.model;
-            deviceTypeSelect.appendChild(option);
+        // ---- reference type choices: only this view's own device types ------------------
+
+        function allowedDeviceTypes() {
+            if (!deviceTypesField) return deviceTypeOptions;
+            return Array.prototype.map.call(deviceTypesField.selectedOptions, function (option) {
+                return { id: option.value, model: option.textContent.trim() };
+            }).filter(function (option) { return option.id; });
         }
 
-        deviceTypeOptions.forEach(addDeviceTypeOption);
-        deviceTypes.forEach(addDeviceTypeOption);
+        function setReferenceOptions(options, value) {
+            var placeholder = options.length ? "Select a device type" : "Add a device type above first";
+            var ts = deviceTypeSelect.tomselect;
+            if (ts) {
+                ts.clear(true);
+                ts.clearOptions();
+                ts.settings.placeholder = placeholder;
+                options.forEach(function (option) { ts.addOption({ value: String(option.id), text: option.model }); });
+                ts.refreshOptions(false);
+                ts.setValue(value ? String(value) : "", true);
+                if (ts.control_input) ts.control_input.placeholder = placeholder;
+            } else {
+                deviceTypeSelect.innerHTML = "";
+                [{ id: "", model: placeholder }].concat(options).forEach(function (option) {
+                    var element = document.createElement("option");
+                    element.value = option.id;
+                    element.textContent = option.model;
+                    deviceTypeSelect.appendChild(element);
+                });
+                deviceTypeSelect.value = value ? String(value) : "";
+            }
+        }
+
+        function syncReferenceOptions() {
+            var options = allowedDeviceTypes();
+            var current = deviceTypeSelect.value;
+            var keep = options.some(function (option) { return String(option.id) === String(current); });
+            var next = keep ? current : (options[0] ? options[0].id : "");
+            setReferenceOptions(options, next);
+            if (String(next) !== String(currentDeviceType ? currentDeviceType.id : "")) selectDeviceType(next);
+        }
+
+        // ---- front-panel image ----------------------------------------------------------
+
+        function imageSearchUrl(deviceType) {
+            var query = [deviceType.manufacturer, deviceType.model, "front view"].filter(Boolean).join(" ");
+            return "https://duckduckgo.com/?q=" + encodeURIComponent(query) + "&iax=images&ia=images";
+        }
+
+        function showImageMessage(message, deviceType) {
+            image.removeAttribute("src");
+            image.hidden = true;
+            imageEmpty.hidden = false;
+            imageMessage.textContent = message;
+            imageSearch.hidden = !deviceType;
+            if (deviceType) imageSearch.href = imageSearchUrl(deviceType);
+            syncOverlay();
+        }
+
+        image.addEventListener("error", function () {
+            if (!image.getAttribute("src")) return;
+            showImageMessage("No front-panel image available for this device type.", currentDeviceType);
+        });
 
         // ---- reference device type templates -------------------------------------------
 
@@ -704,8 +759,6 @@
                 var existingIndex = deviceTypes.findIndex(function (existing) { return existing.id === currentDeviceType.id; });
                 if (existingIndex === -1) deviceTypes.push(currentDeviceType);
                 else deviceTypes[existingIndex] = currentDeviceType;
-                addDeviceTypeOption(currentDeviceType);
-                deviceTypeSelect.value = currentDeviceType.id;
 
                 // A brand-new, still empty layout takes its height from the device type.
                 var untouched = layouts.length === 1 && !layout().grid.some(function (row) {
@@ -718,18 +771,15 @@
                     image.hidden = false;
                     imageEmpty.hidden = true;
                 } else {
-                    image.removeAttribute("src");
-                    image.hidden = true;
-                    imageEmpty.hidden = false;
-                    imageEmpty.textContent = templateChoices().length
-                        ? "No front-panel image is set for this reference device type."
-                        : "This reference device type has no interface, port, or console templates to assign.";
+                    showImageMessage(templateChoices().length
+                        ? "No front-panel image available for this device type."
+                        : "No front-panel image available, and this device type has no interface, port, or console templates to assign.",
+                        currentDeviceType);
                 }
             } else {
-                image.removeAttribute("src");
-                image.hidden = true;
-                imageEmpty.hidden = false;
-                imageEmpty.textContent = "Select a reference device type to show its front-panel image.";
+                showImageMessage(allowedDeviceTypes().length
+                    ? "Select a reference device type to show its front-panel image."
+                    : "Add a device type above to start building the layout.", null);
             }
             syncOverlay();
             loadReferenceDevices(currentDeviceType ? currentDeviceType.id : "");
@@ -748,12 +798,10 @@
             }
             if (!dataUrlTemplate || !window.fetch) {
                 applyDeviceType(null);
-                imageEmpty.textContent = "Could not load interface templates: missing layout-data URL.";
+                showImageMessage("Could not load interface templates: missing layout-data URL.", null);
                 return;
             }
-            image.hidden = true;
-            imageEmpty.hidden = false;
-            imageEmpty.textContent = "Loading reference device type...";
+            showImageMessage("Loading reference device type...", null);
             var url = dataUrlTemplate.replace("__device_type_id__", encodeURIComponent(id));
             fetch(url, { credentials: "same-origin", headers: { "Accept": "application/json" } })
                 .then(function (response) {
@@ -763,11 +811,12 @@
                 .then(function (deviceType) { applyDeviceType(deviceType || null); })
                 .catch(function (error) {
                     applyDeviceType(null);
-                    imageEmpty.textContent = "Could not load interface templates: " + error.message;
+                    showImageMessage("Could not load interface templates: " + error.message, null);
                 });
         }
 
         deviceTypeSelect.addEventListener("change", function () { selectDeviceType(deviceTypeSelect.value); });
+        if (deviceTypesField) deviceTypesField.addEventListener("change", syncReferenceOptions);
 
         // ---- initial state --------------------------------------------------------------
 
@@ -780,10 +829,18 @@
         }
         if (!layouts.length) layouts = [makeLayout(BASE_SELECTOR, "", emptyGrid(2, 32), "")];
 
+        var allowed = allowedDeviceTypes();
         var initialTypeId = (config && config.source_device_type_id) || defaultDeviceTypeId;
-        if (initialTypeId) deviceTypeSelect.value = initialTypeId;
+        if (!allowed.some(function (option) { return String(option.id) === String(initialTypeId); })) {
+            initialTypeId = allowed[0] ? allowed[0].id : "";
+        }
         render();
-        selectDeviceType(deviceTypeSelect.value);
+        // NetBox enhances selects with TomSelect on DOMContentLoaded too; wait a tick so
+        // the reference select is enhanced before its options are rebuilt.
+        setTimeout(function () {
+            setReferenceOptions(allowed, initialTypeId);
+            selectDeviceType(initialTypeId);
+        }, 0);
     }
 
     document.addEventListener("DOMContentLoaded", function () {

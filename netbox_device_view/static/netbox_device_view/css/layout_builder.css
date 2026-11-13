@@ -59,6 +59,24 @@ body.theme-dark .device-layout-builder {
     background: var(--dv-builder-soft-bg);
 }
 
+.device-layout-builder .layout-builder-image-empty {
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.device-layout-builder .layout-builder-image-empty [hidden] {
+    display: none;
+}
+
+.device-layout-builder .layout-builder-help {
+    margin-top: 0.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--dv-builder-border);
+    border-radius: 0.375rem;
+    background: var(--dv-builder-soft-bg);
+    color: var(--dv-builder-text);
+}
+
 .device-layout-builder .layout-builder-image-empty[hidden] {
     display: none;
 }

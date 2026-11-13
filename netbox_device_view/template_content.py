@@ -1,5 +1,5 @@
 from netbox.plugins import PluginTemplateExtension
-from .utils import prepare
+from .utils import device_css_report, prepare
 from django.conf import settings
 from dcim.models import Device, DeviceType
 from .models import DeviceView
@@ -29,6 +29,7 @@ class PortView(PluginTemplateExtension):
                 "modules": modules,
                 "height": height,
                 "ports_chassis": ports_chassis,
+                "css_issues": device_css_report(obj),
             },
         )
 

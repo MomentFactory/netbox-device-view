@@ -8,7 +8,7 @@ from .models import DeviceView
 from dcim.models import DeviceType
 from utilities.forms.fields import CSVModelChoiceField, CSVModelMultipleChoiceField
 from utilities.forms.widgets import APISelectMultiple
-from .grid_css import css_problems, generate_grid_css, normalize_config, parse_grid_css
+from .grid_css import generate_grid_css, normalize_config, parse_grid_css, validate_css
 from .utils import get_device_type_layout_data
 
 
@@ -30,14 +30,19 @@ class LayoutBuilderWidget(forms.Widget):
         self.attrs.pop("device_type_ids", None)
         self.attrs.pop("grid_template_area", None)
         context = super().get_context(name, value, attrs)
-        source_device_type_id = (value or {}).get("source_device_type_id")
-        if source_device_type_id:
-            device_type_ids.append(source_device_type_id)
-        default_device_type_id = source_device_type_id or (device_type_ids[0] if device_type_ids else "")
-        selected_device_types = DeviceType.objects.filter(pk__in=set(device_type_ids)).select_related("manufacturer").order_by(
-            "manufacturer__name", "model"
+        # The reference type must be one of the view's own device types; the
+        # builder keeps this list in step with the Device types field.
+        selected_device_types = list(
+            DeviceType.objects.filter(pk__in={str(pk) for pk in device_type_ids if str(pk).isdigit()})
+            .select_related("manufacturer")
+            .order_by("manufacturer__name", "model")
         )
-        device_types = DeviceType.objects.select_related("manufacturer").order_by("manufacturer__name", "model")
+        selected_ids = [device_type.pk for device_type in selected_device_types]
+        source_device_type_id = (value or {}).get("source_device_type_id")
+        if source_device_type_id not in selected_ids:
+            source_device_type_id = selected_ids[0] if selected_ids else ""
+        default_device_type_id = source_device_type_id
+        device_types = selected_device_types
         context["widget"]["value"] = json.dumps(value or {})
         context["device_type_options"] = [
             {
@@ -133,6 +138,10 @@ class DeviceViewForm(NetBoxModelForm):
         if layout_config is None:
             if not submitted_css:
                 self.add_error("grid_template_area", "Enter CSS here or build a layout with the visual builder.")
+            else:
+                problems = validate_css(submitted_css)
+                if problems:
+                    self.add_error("grid_template_area", problems)
             return cleaned_data
 
         try:
@@ -144,7 +153,7 @@ class DeviceViewForm(NetBoxModelForm):
         if submitted_css and submitted_css != generated_css.strip():
             # The Advanced CSS was edited after the builder last synced it:
             # keep the hand edit and rebuild the builder config from it.
-            problems = css_problems(submitted_css)
+            problems = validate_css(submitted_css)
             if problems:
                 self.add_error("grid_template_area", problems)
                 return cleaned_data

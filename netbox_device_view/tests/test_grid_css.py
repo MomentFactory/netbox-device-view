@@ -5,11 +5,15 @@ from pathlib import Path
 from netbox_device_view.grid_css import (
     EMPTY_TOKEN,
     area_problems,
+    css_grid_problems,
     css_problems,
+    css_syntax_problems,
     describe_grid_css,
     generate_grid_css,
     normalize_config,
     parse_grid_css,
+    repair_css,
+    validate_css,
     validate_layout,
 )
 
@@ -169,6 +173,76 @@ class CssSafetyTest(unittest.TestCase):
         css = generate_grid_css({"mode": "builder", "layouts": [layout]})
         self.assertNotIn("<", css)
         self.assertEqual(css_problems(css), [])
+
+
+# Stored on a real site after a spreadsheet round trip: the first row lost its
+# opening quote and a stray quote follows the closing brace.  Printed into the
+# shared <style>, the "}" ends up inside a string and every later rule (other
+# devices' sizing) is swallowed.
+IMPORT_DAMAGED = (
+    '.deviceview.area { background-color: #d9d9d9; grid-template-areas: x x x x x x x x" '
+    '"x x x gigabitethernet1 gigabitethernet2 s0 gigabitethernet3 s0 z "; }"'
+)
+
+
+class CssStructureTest(unittest.TestCase):
+    def test_examples_are_valid(self):
+        for name, css in example_css_files().items():
+            with self.subTest(example=name):
+                self.assertEqual(validate_css(css), [])
+
+    def test_import_damage_is_blocking(self):
+        problems = css_syntax_problems(IMPORT_DAMAGED)
+        self.assertTrue(any("never closed" in problem for problem in problems))
+        self.assertTrue(any("must be quoted" in problem for problem in problems))
+
+    def test_syntax_problems(self):
+        for css in (
+            '.deviceview.area { grid-template-areas: "a b; }',
+            ".deviceview.area { grid-template-areas: 'a b'; ",
+            '.deviceview.area { grid-template-areas: "a b"; } }',
+            '.deviceview.area { grid-template-areas: "a b"; } stray',
+            '.deviceview.area { grid-template-areas: "a b"; } /* open',
+        ):
+            with self.subTest(css=css):
+                self.assertTrue(css_syntax_problems(css))
+
+    def test_valid_css_has_no_syntax_problems(self):
+        css = '/* a } " */ .deviceview.area { grid-template-areas: "a b" \'c d\'; }\n.x[title="}"] { color: red; }'
+        self.assertEqual(css_syntax_problems(css), [])
+
+    def test_grid_problems(self):
+        ragged = '.deviceview.area { grid-template-areas: "a b c" "d e"; }'
+        self.assertIn("different numbers of cells (3, 2)", css_grid_problems(ragged)[0])
+        # Legacy fillers are real area names to the browser, so they must be rectangles too.
+        filler = '.deviceview.area { grid-template-areas: "x x a" "x b x"; }'
+        self.assertTrue(any("'x'" in problem for problem in css_grid_problems(filler)))
+        self.assertEqual(css_grid_problems('.deviceview.area { grid-template-areas: ". .. a" "b . ."; }'), [])
+
+    def test_validate_reports_syntax_before_grid(self):
+        self.assertEqual(validate_css(IMPORT_DAMAGED), css_syntax_problems(IMPORT_DAMAGED))
+
+    def test_repair_import_damage(self):
+        repaired, problems = repair_css(IMPORT_DAMAGED)
+        self.assertEqual(problems, [])
+        layout = parse_grid_css(repaired)["layouts"][0]
+        self.assertEqual(layout["declarations"], "background-color: #d9d9d9")
+        self.assertEqual(layout["grid"][1][3:6], ["gigabitethernet1", "gigabitethernet2", "."])
+
+    def test_repair_leaves_real_conflicts(self):
+        css = '.deviceview.area { grid-template-areas: "gi1 gi2" "gi2 gi1"; }'
+        repaired, problems = repair_css(css)
+        self.assertEqual(repaired, css)
+        self.assertTrue(problems)
+
+    def test_repair_keeps_valid_css(self):
+        for name, css in example_css_files().items():
+            with self.subTest(example=name):
+                self.assertEqual(repair_css(css), (css, []))
+
+    def test_builder_rejects_unbalanced_declarations(self):
+        layout = _layout(declarations='font-family: "Mono')
+        self.assertTrue(validate_layout(layout))
 
 
 def _layout(**overrides):

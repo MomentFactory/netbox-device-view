@@ -4,7 +4,7 @@ from django.db import models
 
 from netbox.models import NetBoxModel
 
-from .grid_css import css_problems
+from .grid_css import validate_css
 
 
 class DeviceView(NetBoxModel):
@@ -34,7 +34,7 @@ class DeviceView(NetBoxModel):
     def clean(self):
         super().clean()
         # Covers the UI form, CSV import and the REST API.
-        problems = css_problems(self.grid_template_area)
+        problems = validate_css(self.grid_template_area)
         if problems:
             raise ValidationError({"grid_template_area": problems})
 

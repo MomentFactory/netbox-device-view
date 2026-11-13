@@ -1,0 +1,30 @@
+{% comment %}
+Warns about DeviceViews whose stored CSS is invalid.  Expects css_issues from
+utils.view_css_report(): [{"view", "problems", "skipped"}].
+{% endcomment %}
+{% if css_issues %}
+<div class="alert alert-danger small py-2 px-3 mt-3 mb-2" role="alert">
+  <div>
+    <i class="mdi mdi-alert-octagon"></i>
+    <strong>Invalid device view CSS</strong>
+    <ul class="mb-0 mt-1 ps-3">
+        {% for issue in css_issues %}
+        <li>
+            <a href="{{ issue.view.get_absolute_url }}"><strong>{{ issue.view }}</strong></a> <span class="text-muted">(#{{ issue.view.pk }})</span>
+            {% if issue.skipped %}
+            <span>was not drawn, because its CSS would break the rest of the page.</span>
+            {% else %}
+            <span>has a grid the browser ignores, so its ports are not placed.</span>
+            {% endif %}
+            <a class="ms-1 text-nowrap" href="{% url 'plugins:netbox_device_view:deviceview_edit' pk=issue.view.pk %}"><i class="mdi mdi-pencil"></i>Fix</a>
+            <ul class="text-muted ps-3">
+                {% for problem in issue.problems|slice:":5" %}<li>{{ problem }}</li>{% endfor %}
+                {% if issue.problems|length > 5 %}<li>… and {{ issue.problems|length|add:"-5" }} more</li>{% endif %}
+            </ul>
+        </li>
+        {% endfor %}
+    </ul>
+    <div class="text-muted mt-1">Admins can list and auto-repair these with <code>manage.py check_deviceview_css --fix</code>.</div>
+  </div>
+</div>
+{% endif %}

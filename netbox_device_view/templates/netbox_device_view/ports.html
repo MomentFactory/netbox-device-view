@@ -3,10 +3,12 @@
 	rel="stylesheet"
 	href="{% static 'netbox_device_view/css/device_view.css' %}"
 />
+{% for id, ddv in dv.items %}{% if ddv %}
 <style>
-	{% for id, ddv in dv.items %}
 	{{ ddv|css_safe }}
-	{% endfor %}
+</style>
+{% endif %}{% endfor %}
+<style>
 	{% if height %}
 
 	.deviceview {
@@ -18,6 +20,7 @@
 <div class="card">
 	<h2 class="card-header">Deviceview {{ object.name }}</h2>
 	<div class="card-body">
+		{% include 'netbox_device_view/includes/_css_issues.html' %}
 		{% spaceless %} {% for switch, interfaces in ports_chassis.items %} Device
 		{{switch}}
 		<div

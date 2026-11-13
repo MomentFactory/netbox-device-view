@@ -8,6 +8,10 @@
   <link rel="stylesheet" href="{% static 'netbox_device_view/css/device_view.css' %}?v={{ plugin_version }}">
   <link rel="stylesheet" href="{% static 'netbox_device_view/css/layout_builder.css' %}?v={{ plugin_version }}">
   <script src="{% static 'netbox_device_view/js/layout_builder.js' %}?v={{ plugin_version }}" defer></script>
+  <style>
+    /* The grid builder needs the room: NetBox caps edit forms at 800px. */
+    form.object-edit { max-width: none; }
+  </style>
 {% endblock head %}
 
 {% block form %}

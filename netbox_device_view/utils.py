@@ -5,7 +5,10 @@ from django.apps import apps
 from django.conf import settings
 
 import re
+from functools import lru_cache
 from types import SimpleNamespace
+
+from .grid_css import css_grid_problems, css_problems, css_syntax_problems
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +96,45 @@ def build_template_ports(device_type):
                 )
             )
     return ports
+
+
+@lru_cache(maxsize=1024)
+def css_health(css):
+    """
+    Return ``(problems, blocking)`` for stored DeviceView CSS.
+
+    *blocking* problems (unsafe text, unclosed strings or braces) would break
+    every rule printed after them, so such CSS is never put on a page.  Grid
+    problems only make the browser ignore that view's layout.
+    """
+    blocking = tuple(css_problems(css) + css_syntax_problems(css))
+    return (blocking or tuple(css_grid_problems(css))), bool(blocking)
+
+
+def page_safe_css(css):
+    """*css* if it can be printed into a shared <style> block, else ""."""
+    css = str(css or "")
+    return "" if css_health(css)[1] else css
+
+
+def view_css_report(device_views):
+    """Problems for each distinct DeviceView in *device_views*, for page warnings."""
+    report, seen = [], set()
+    for device_view in device_views:
+        if device_view is None or device_view.pk in seen:
+            continue
+        seen.add(device_view.pk)
+        problems, blocking = css_health(str(device_view.grid_template_area or ""))
+        if problems:
+            report.append({"view": device_view, "problems": problems, "skipped": blocking})
+    return report
+
+
+def device_css_report(device):
+    """view_css_report() for the views used by *device* (every member of a stack)."""
+    members = device.virtual_chassis.members.all() if device.virtual_chassis_id else [device]
+    lookup = build_device_view_lookup({member.device_type_id for member in members})
+    return view_css_report(lookup.get(member.device_type_id) for member in members)
 
 
 def collect_device_ports(device):
@@ -280,6 +322,7 @@ def get_device_type_layout_data(device_type):
     return {
         "id": device_type.pk,
         "model": device_type.model,
+        "manufacturer": str(device_type.manufacturer) if device_type.manufacturer_id else "",
         "u_height": u_height,
         "rows": rows,
         "columns": 32,
@@ -450,7 +493,7 @@ def prepare(obj, instance_prefix=None, device_view_lookup=None):
             device_view_instance = _get_device_view(obj)
             if not device_view_instance:
                 return None, None, None
-            grid_css = device_view_instance.grid_template_area
+            grid_css = page_safe_css(device_view_instance.grid_template_area)
 
             dv[1] = _apply_prefix(grid_css)
 
@@ -474,7 +517,7 @@ def prepare(obj, instance_prefix=None, device_view_lookup=None):
                 member_device_view_instance = _get_device_view(member)
                 if not member_device_view_instance:
                     continue
-                member_grid_css = member_device_view_instance.grid_template_area
+                member_grid_css = page_safe_css(member_device_view_instance.grid_template_area)
 
                 processed_member_grid_css = member_grid_css.replace(
                     ".area", ".area.d" + str(member.vc_position)

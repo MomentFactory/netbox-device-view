@@ -5,6 +5,7 @@
 {% load plugins %}
 
 {% block content %}
+{% include 'netbox_device_view/includes/_css_issues.html' %}
 {% if missing_devices %}
 <div class="missing-views border border-warning rounded mt-3 px-2 py-1 small">
     <a class="text-reset text-decoration-none d-block" data-bs-toggle="collapse" href="#missing-device-views-body" role="button" aria-expanded="false" aria-controls="missing-device-views-body">
@@ -73,12 +74,13 @@
 {% block head %}
 {{ block.super }}
 <link rel="stylesheet" href="{% static 'netbox_device_view/css/device_view.css' %}" />
+{% comment %}One <style> per view: a stylesheet that fails to parse cannot swallow the rules in the next one.{% endcomment %}
+{% for data in prepared_devices %}{% for id, ddv_css in data.dv_css_map.items %}{% if ddv_css %}
 <style>
-    {% for data in prepared_devices %}
-        {% for id, ddv_css in data.dv_css_map.items %}
-            {{ ddv_css|css_safe }}
-        {% endfor %}
-    {% endfor %}
+{{ ddv_css|css_safe }}
+</style>
+{% endif %}{% endfor %}{% endfor %}
+<style>
 
     .multi-device-container {
         display: flex;

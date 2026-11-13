@@ -10,10 +10,12 @@
 	rel="stylesheet"
 	href="{% static 'netbox_device_view/css/device_view.css' %}"
 />
+{% for id, ddv in dv.items %}{% if ddv %}
 <style>
-	{% for id, ddv in dv.items %}
 	{{ ddv|css_safe }}
-	{% endfor %}
+</style>
+{% endif %}{% endfor %}
+<style>
 	{% if render_height %}
 	.deviceview {
 		height:{{ render_height }}px;
@@ -50,6 +52,7 @@
 </style>
 {% endblock %}
 {% block content %}
+{% include 'netbox_device_view/includes/_css_issues.html' %}
 {% if object.site %}
 <div class="clearfix mb-2">
     <a href="{% url 'dcim:site_ports' pk=object.site.pk %}" class="btn btn-sm btn-primary float-end">

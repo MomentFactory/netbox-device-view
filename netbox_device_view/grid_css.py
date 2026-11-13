@@ -63,6 +63,146 @@ def css_problems(css):
     return problems
 
 
+def css_syntax_problems(css):
+    """
+    Return problems that would leak out of this view's own rules.
+
+    Every view's CSS is printed into the same page, so an unclosed string,
+    comment or ``{`` swallows the rules that follow it, including other
+    devices' sizing rules.  Stray text after the last rule does the same.
+    """
+    text = str(css or "")
+    problems = []
+    depth = 0
+    quote = None
+    quote_line = 0
+    line = 1
+    prelude = []
+    i = 0
+    while i < len(text):
+        char = text[i]
+        if char == "\n":
+            line += 1
+        if quote:
+            if char == quote:
+                quote = None
+            elif char == "\n":
+                problems.append(f"Line {quote_line}: a quoted string is never closed.")
+                quote = None
+            i += 1
+            continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            if end == -1:
+                problems.append(f"Line {line}: a /* comment is never closed.")
+                break
+            line += text.count("\n", i, end)
+            i = end + 2
+            continue
+        if char in "\"'":
+            quote, quote_line = char, line
+        elif char == "{":
+            depth += 1
+            prelude = []
+        elif char == "}":
+            if depth == 0:
+                problems.append(f"Line {line}: '}}' has no matching '{{'.")
+            else:
+                depth -= 1
+            i += 1
+            continue
+        if depth == 0 and char not in "{":
+            prelude.append(char)
+        i += 1
+
+    if quote:
+        problems.append(f"Line {quote_line}: a quoted string is never closed.")
+    if depth:
+        problems.append(f"{depth} '{{' never closed (a '}}' may be inside quotes).")
+    trailing = "".join(prelude).strip()
+    if trailing and not quote and not depth:
+        problems.append(f"Text after the last rule is outside any {{ }} block: {trailing[:30]!r}.")
+    if UNQUOTED_AREAS_PATTERN.search(COMMENT_PATTERN.sub("", text)):
+        problems.append('grid-template-areas rows must be quoted, e.g. "a b" "c d".')
+    return problems
+
+
+UNQUOTED_AREAS_PATTERN = re.compile(r"grid-template-areas\s*:\s*(?![\s\"']|none\b|inherit\b|initial\b|unset\b|var\()", re.IGNORECASE)
+AREAS_VALUE_PATTERN = re.compile(r"^(\s*(\"[^\"]*\"|'[^']*'))+\s*$")
+
+
+def _rule_blocks(text):
+    """Yield (selector, body) for innermost rule blocks of syntactically valid CSS."""
+    text = COMMENT_PATTERN.sub("", text)
+    for match in re.finditer(r"([^{}]*)\{([^{}]*)\}", text):
+        yield " ".join(match.group(1).split()), match.group(2)
+
+
+def css_grid_problems(css):
+    """
+    Return grid-template-areas problems the browser would reject.  These only
+    affect the view's own device (its ports are drawn unplaced), unlike
+    :func:`css_syntax_problems`.
+    """
+    problems = []
+    for selector, body in _rule_blocks(str(css or "")):
+        for declaration in body.split(";"):
+            prop, sep, value = declaration.partition(":")
+            if not sep or prop.strip().lower() != "grid-template-areas":
+                continue
+            value = value.strip()
+            if value.lower() in ("none", "inherit", "initial", "unset"):
+                continue
+            if not AREAS_VALUE_PATTERN.match(value):
+                problems.append(f"{selector}: grid-template-areas rows must be quoted strings.")
+                continue
+            rows = [(m.group(1) if m.group(1) is not None else m.group(2)).split() for m in ROW_STRING_PATTERN.finditer(value)]
+            lengths = [len(row) for row in rows]
+            if len(set(lengths)) > 1:
+                problems.append(f"{selector}: rows have different numbers of cells ({', '.join(map(str, lengths))}).")
+                continue
+            grid = [[EMPTY_TOKEN if re.fullmatch(r"\.+", token) else token for token in row] for row in rows]
+            for token, problem in area_problems(grid).items():
+                problems.append(f"{selector}: '{token}' {problem}")
+    return problems
+
+
+def validate_css(css):
+    """All problems with stored DeviceView CSS: safety, syntax, then grid shape."""
+    problems = css_problems(css) + css_syntax_problems(css)
+    if not problems:
+        problems = css_grid_problems(css)
+    return problems
+
+
+def repair_css(css):
+    """
+    Best-effort repair of stored DeviceView CSS.  Returns ``(css, problems)``
+    where *problems* lists what is still wrong afterwards.
+
+    1. Quoting damaged by spreadsheet/CSV round trips: the first row's opening
+       quote missing and a stray quote after the closing brace.
+    2. Grid shape: legacy filler names (x, z, s0…) that are not rectangles and
+       ragged rows, fixed by rebuilding the layouts as the builder would.
+    """
+    text = str(css or "")
+    if css_syntax_problems(text):
+        candidate = re.sub(r"(grid-template-areas\s*:\s*)(?=[^\s\"'])", r'\1"', text, flags=re.IGNORECASE)
+        candidate = re.sub(r"\}\s*[\"']\s*$", "}", candidate)
+        if len(css_syntax_problems(candidate)) < len(css_syntax_problems(text)):
+            text = candidate
+    if not css_syntax_problems(text) and css_grid_problems(text):
+        parsed = parse_grid_css(text)
+        if parsed["layouts"]:
+            blocks = [generate_layout_css(layout) for layout in parsed["layouts"]]
+            if parsed["extra_css"]:
+                blocks.append(parsed["extra_css"])
+            candidate = "\n\n".join(blocks)
+            if len(validate_css(candidate)) < len(validate_css(text)):
+                text = candidate
+    return text, validate_css(text)
+
+
 def is_filler(token):
     return not token or bool(FILLER_PATTERN.match(token))
 
@@ -223,6 +363,8 @@ def validate_layout(layout):
     if FORBIDDEN_DECLARATION_CHARS & set(declarations):
         errors.append(f"{name}: extra declarations may not contain {{ }} < or >.")
     errors.extend(f"{name}: {problem}" for problem in css_problems(declarations) if "'<'" not in problem)
+    # Declarations sit inside the generated block, so check them as a rule body.
+    errors.extend(f"{name}: {problem}" for problem in css_syntax_problems(f".x {{{declarations}}}"))
     if "grid-template-areas" in declarations.lower():
         errors.append(f"{name}: put grid-template-areas in the grid, not in extra declarations.")
 
@@ -291,7 +433,7 @@ def generate_grid_css(config):
 
     blocks = [generate_layout_css(layout) for layout in config["layouts"]]
     if config["extra_css"]:
-        problems = css_problems(config["extra_css"])
+        problems = css_problems(config["extra_css"]) + css_syntax_problems(config["extra_css"])
         if problems:
             raise ValueError("Extra CSS: " + " ".join(problems))
         blocks.append(config["extra_css"])
