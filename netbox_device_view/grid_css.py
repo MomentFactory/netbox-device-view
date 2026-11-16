@@ -203,6 +203,24 @@ def repair_css(css):
     return text, validate_css(text)
 
 
+def repair_view_data(css, layout_config):
+    """
+    Repair a stored view's CSS and keep its builder config in step.  Returns
+    ``(css, layout_config, remaining_problems)``; *css* is unchanged when no
+    safe repair exists.  Shared by the check_deviceview_css command and the
+    upgrade data migration.
+    """
+    repaired, remaining = repair_css(css)
+    if repaired == str(css or ""):
+        return css, layout_config, remaining
+    config = normalize_config(layout_config)
+    if config is not None:
+        parsed = parse_grid_css(repaired)
+        config.update(layouts=parsed["layouts"], extra_css=parsed["extra_css"])
+        layout_config = config
+    return repaired, layout_config, remaining
+
+
 def is_filler(token):
     return not token or bool(FILLER_PATTERN.match(token))
 

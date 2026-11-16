@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from netbox_device_view.grid_css import normalize_config, parse_grid_css, repair_css, validate_css
+from netbox_device_view.grid_css import repair_view_data, validate_css
 from netbox_device_view.models import DeviceView
 
 
@@ -28,7 +28,7 @@ class Command(BaseCommand):
             for problem in problems:
                 self.stdout.write(f"    - {problem}")
 
-            repaired, left = repair_css(css)
+            repaired, config, left = repair_view_data(css, view.layout_config)
             if repaired == css:
                 self.stdout.write(self.style.ERROR("    no automatic repair; edit this view by hand"))
                 remaining += 1
@@ -44,12 +44,7 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     view.snapshot()
                     view.grid_template_area = repaired
-                    # Keep the visual builder in step with the CSS it will now open.
-                    config = normalize_config(view.layout_config)
-                    if config is not None:
-                        parsed = parse_grid_css(repaired)
-                        config.update(layouts=parsed["layouts"], extra_css=parsed["extra_css"])
-                        view.layout_config = config
+                    view.layout_config = config
                     view.save()
                 fixed += 1
 

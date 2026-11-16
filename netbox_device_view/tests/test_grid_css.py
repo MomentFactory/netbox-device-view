@@ -13,6 +13,7 @@ from netbox_device_view.grid_css import (
     normalize_config,
     parse_grid_css,
     repair_css,
+    repair_view_data,
     validate_css,
     validate_layout,
 )
@@ -239,6 +240,17 @@ class CssStructureTest(unittest.TestCase):
         for name, css in example_css_files().items():
             with self.subTest(example=name):
                 self.assertEqual(repair_css(css), (css, []))
+
+    def test_repair_view_data_syncs_builder_config(self):
+        css, config, remaining = repair_view_data(IMPORT_DAMAGED, {"mode": "builder", "layouts": []})
+        self.assertEqual(remaining, [])
+        self.assertEqual(config["layouts"], parse_grid_css(css)["layouts"])
+        # Non-builder configs (the upgrade default {}) are left alone.
+        self.assertEqual(repair_view_data(IMPORT_DAMAGED, {})[1], {})
+
+    def test_repair_view_data_leaves_valid_css(self):
+        css = '.deviceview.area { grid-template-areas: "a b"; }'
+        self.assertEqual(repair_view_data(css, {}), (css, {}, []))
 
     def test_builder_rejects_unbalanced_declarations(self):
         layout = _layout(declarations='font-family: "Mono')
